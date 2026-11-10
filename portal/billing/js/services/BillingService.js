@@ -4,8 +4,8 @@
  * The backend answers with data and stable codes; the wording of every code
  * lives here, so no screen shows a SCREAMING_SNAKE to a cashier.
  */
-import { resolveBases, request } from './apiClient.js';
-import { getToken } from '../auth.js';
+import { resolveBases, request } from '../../common/js/session/apiClient.js';
+import { getToken } from '../../common/js/session/auth.js';
 import { BILLING_URL, BILLING_URL_LOCAL } from '../config.js';
 
 const BASES = resolveBases({ remote: BILLING_URL, local: BILLING_URL_LOCAL });

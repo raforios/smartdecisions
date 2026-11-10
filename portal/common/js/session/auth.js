@@ -1,11 +1,13 @@
 /**
- * JWT helpers shared by every page.
+ * JWT helpers shared by every page of the ES-module portals (SmartBilling,
+ * WMS). Each portal names its own storage key in its `/js/config.js`: the
+ * products are sold apart, so one session does not open the other.
  *
  * Decoding is signature-less on purpose: the backend already validates the
  * signature on every protected call, so the frontend only needs the public
  * claims (email, role) to render UI and gate routes.
  */
-import { STORAGE_TOKEN_KEY as STORAGE_KEY } from './config.js';
+import { STORAGE_TOKEN_KEY as STORAGE_KEY } from '/js/config.js';
 
 export function getToken() {
     return localStorage.getItem(STORAGE_KEY);
@@ -50,9 +52,3 @@ export function isTokenExpired() {
 export function clearSession() {
     localStorage.removeItem(STORAGE_KEY);
 }
-
-export const ROLES = Object.freeze({
-    ADMIN: 'ADMIN',
-    WAREHOUSE_MANAGER: 'WAREHOUSE_MANAGER',
-    REQUESTER: 'REQUESTER',
-});

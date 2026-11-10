@@ -24,3 +24,6 @@ export const LOGIN_PATH = 'login.html';
 
 /** Key the JWT is kept under. Its own key: BILLING is sold on its own. */
 export const STORAGE_TOKEN_KEY = 'billing_jwt';
+
+/** "Recordar mi correo" keeps the e-mail only, under its own key. */
+export const REMEMBER_EMAIL_KEY = 'billing_login_email';

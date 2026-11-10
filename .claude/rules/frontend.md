@@ -23,6 +23,12 @@ sync` sigue el symlink y lo sube a `/common/` de cada sitio. Lo propio de
 cada producto (el menú, `analyses.css`, `billing.css`) no redefine nada de lo
 común.
 
+Los portales de módulos ES (SmartBilling y el WMS) comparten además
+`common/js/session/`: la sesión (`auth.js`), el inicio de sesión (`login.js`,
+`AuthService.js`) y el transporte (`apiClient.js`). Leen su configuración de
+`/js/config.js` del sitio (URL de AUTH y claves de almacenamiento propias de
+cada producto), así una sesión de un producto no abre el otro.
+
 ## Rutas: absolutas en el login, relativas en los módulos
 
 La distribución mapea **404 → `/index.html` dejando la URL intacta**, así que la

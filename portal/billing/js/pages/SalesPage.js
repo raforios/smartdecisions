@@ -11,7 +11,7 @@
  * mail like the invoice.
  */
 import { BillingService, PAYMENT_LABELS, errorText } from '../services/BillingService.js';
-import { hasRole } from '../auth.js';
+import { hasRole } from '../../common/js/session/auth.js';
 import { invoiceQr, printCreditNote, printTicket, ticketHtml } from './TicketPrinter.js';
 import { escapeHtml, money, notify, setBusy, stamp, todayIso, rowIcon } from '../ui.js';
 

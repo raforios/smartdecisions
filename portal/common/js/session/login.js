@@ -1,14 +1,12 @@
 /**
- * Sign-in screen, the same one SmartDecisions shows.
+ * Sign-in screen of the ES-module portals, the same one SmartDecisions shows.
  *
  * Against AUTH, like every BearSoft product. If there is already a session, it
  * goes straight in instead of asking for the credentials again.
  */
+import { REMEMBER_EMAIL_KEY as REMEMBER_KEY } from '/js/config.js';
 import { isTokenExpired } from './auth.js';
-import { isAuthenticated, login } from './services/AuthService.js';
-
-/** "Recordar mi correo": the e-mail only, in this browser. */
-const REMEMBER_KEY = 'billing_login_email';
+import { isAuthenticated, login } from './AuthService.js';
 
 function remembered() {
     try {

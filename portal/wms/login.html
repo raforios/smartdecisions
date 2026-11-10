@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar sesión — WMS</title>
+    <link rel="stylesheet" href="common/styles/base.css">
+    <link rel="stylesheet" href="common/styles/login.css">
+    <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-bear-64.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-bear-32.png">
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+    <script src="common/js/ui.js" defer></script>
+    <script src="common/js/icons.js" defer></script>
+    <script type="module" src="common/js/session/login.js"></script>
+</head>
+<body class="sd-login">
+
+<div class="login-shell">
+    <section class="login-brand" aria-hidden="true">
+        <div class="login-mark">
+            <img src="assets/bear-face.jpg" alt="">
+            <span><b>WMS</b></span>
+        </div>
+        <div class="login-message">
+            <h2>Cada producto, en su lugar.</h2>
+            <p>El plano de tus almacenes, sus ubicaciones y lo que guarda cada una, al día con tu ERP.</p>
+        </div>
+        <div class="login-maker">
+            <span>Un producto de</span>
+            <img src="assets/bearsoft-logo-white.png" alt="BearSoft">
+        </div>
+    </section>
+
+    <section class="login-form-side">
+        <form id="loginForm" class="login-form" novalidate>
+            <h1>Inicia sesión</h1>
+            <p class="login-lead">Entra con el correo y la contraseña de tu cuenta.</p>
+            <label class="login-field">
+                <span>Correo</span>
+                <span class="login-input">
+                    <input type="email" name="email" required autocomplete="email" autofocus>
+                </span>
+            </label>
+            <label class="login-field">
+                <span>Contraseña</span>
+                <span class="login-input has-toggle sd-reveal">
+                    <input type="password" name="password" id="loginPassword" required
+                           autocomplete="current-password">
+                    <button type="button" class="sd-reveal-toggle" id="passwordToggle"
+                            aria-label="Mostrar la contraseña" aria-pressed="false"></button>
+                </span>
+            </label>
+            <!-- Only the e-mail is kept, never the password nor the session. -->
+            <label class="login-remember">
+                <input type="checkbox" id="rememberEmail"><span>Recordar mi correo</span>
+            </label>
+            <button type="submit" class="btn btn-primary login-submit" id="loginButton" data-btn-icon="login">Entrar</button>
+            <p class="form-note" id="loginNote" aria-live="polite"></p>
+        </form>
+    </section>
+</div>
+
+</body>
+</html>

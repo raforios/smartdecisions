@@ -6,7 +6,7 @@
  * do, but the backend is the one in charge — this only avoids showing a
  * button that would answer 403.
  */
-import { clearSession, getEmail, getRole, isTokenExpired } from './auth.js';
+import { clearSession, getEmail, getRole, isTokenExpired } from '../common/js/session/auth.js';
 import { LOGIN_PATH } from './config.js';
 import { BillingService, errorText } from './services/BillingService.js';
 import { errorCard, escapeHtml, notify } from './ui.js';

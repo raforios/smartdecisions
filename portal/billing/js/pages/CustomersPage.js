@@ -5,7 +5,7 @@
  * what it lacked. Correcting a customer is done here and only here, by whoever
  * runs the shop, because an invoice must never undo a correction.
  */
-import { hasRole } from '../auth.js';
+import { hasRole } from '../../common/js/session/auth.js';
 import { BillingService, errorText } from '../services/BillingService.js';
 import { escapeHtml, notify, setBusy, stamp, rowIcon } from '../ui.js';
 

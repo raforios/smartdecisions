@@ -1,0 +1,132 @@
+/*
+ * WMS — what this product adds on top of the common sheets: the plan and its
+ * side panel. Buttons, cards, tables, badges and the frame are the common
+ * ones (`common/styles/`), the same files SmartDecisions and SmartBilling load.
+ */
+
+:root {
+    /* The plan's own colours, from the brand's blues. */
+    --plan-floor:          #fbfcfe;
+    --plan-grid:           #e7edf6;
+    --plan-grid-major:     #cfdbea;
+    --plan-warehouse:      #dceafa;
+    --plan-warehouse-line: #2f6fb5;
+    --plan-aisle:          #f3f0e2;
+    --plan-aisle-stripe:   #e2d9b0;
+    --plan-aisle-line:     #c9b97a;
+    --plan-element-line:   rgba(13, 26, 49, 0.35);
+    --plan-selected:       #12796f;
+    --plan-blocked:        #b4373a;
+}
+
+.muted { color: var(--muted); }
+.small { font-size: var(--fs-label); }
+
+#view > div > :is(.card, section, div) + :is(.card, section, .plan-layout) { margin-top: var(--gap-block); }
+#view > div > .sd-page-head + * { margin-top: 0; }
+
+.warehouse-pick select { min-width: 16rem; }
+
+/* ------------------------------------------------------------ Layout -- */
+
+.plan-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: var(--gap-block);
+    align-items: start;
+}
+.plan-card { min-width: 0; display: grid; gap: 1rem; }
+.plan-panel { position: sticky; top: calc(var(--topbar-height) + 1rem); display: grid; gap: 0.8rem; }
+.plan-panel h3 { margin: 0; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+
+.plan-tools { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem 1.5rem; }
+.tool-group { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem; }
+.plan-tools .field input { width: 7rem; }
+.plan-tools .field input[name="name"] { width: 14rem; }
+
+.plan-legend { display: flex; flex-wrap: wrap; gap: 0.5rem 1.1rem; font-size: var(--fs-label); color: var(--muted); }
+.plan-legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.plan-legend i { width: 0.9rem; height: 0.9rem; border-radius: 3px; border: 1px solid var(--plan-element-line); }
+.plan-legend i.is-aisle { background: repeating-linear-gradient(45deg, var(--plan-aisle) 0 3px, var(--plan-aisle-stripe) 3px 5px); }
+
+/* --------------------------------------------------------------- Plan -- */
+
+.plan-host {
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--plan-floor);
+}
+.plan-svg { display: block; width: 100%; height: auto; touch-action: none; user-select: none; }
+.plan-floor { fill: var(--plan-floor); }
+.plan-grid line { stroke: var(--plan-grid); stroke-width: 0.05; }
+.plan-grid line.is-major { stroke: var(--plan-grid-major); stroke-width: 0.1; }
+.plan-ruler line { stroke: var(--text); stroke-width: 0.15; }
+.plan-ruler text { font-size: 1.2px; fill: var(--muted); text-anchor: middle; font-family: var(--font); }
+
+.plan-item { cursor: grab; outline: none; }
+.plan-item:active { cursor: grabbing; }
+.plan-item rect { stroke-width: 0.12; vector-effect: non-scaling-stroke; transition: filter 0.15s ease; }
+.plan-item.is-warehouse rect { stroke-width: 2px; }
+.plan-item.is-element rect { stroke-width: 1px; }
+.plan-item.is-aisle rect { stroke-width: 1px; stroke-dasharray: 4 3; }
+.plan-item text {
+    fill: var(--text-strong);
+    font-family: var(--font);
+    font-weight: 700;
+    text-anchor: middle;
+    dominant-baseline: central;
+    pointer-events: none;
+}
+.plan-item.is-element text { fill: #ffffff; font-weight: 600; }
+.plan-item.is-aisle text { fill: #8a7a3d; font-weight: 600; }
+.plan-item text.plan-sub { font-weight: 500; fill: var(--muted); }
+.plan-item:hover rect, .plan-item:focus-visible rect { filter: brightness(1.06) drop-shadow(0 0 0.3px rgba(13, 26, 49, 0.4)); }
+.plan-item.is-selected rect { stroke: var(--plan-selected); stroke-width: 3px; stroke-dasharray: none; }
+.plan-item.is-blocked rect { stroke: var(--plan-blocked); stroke-width: 3px; fill-opacity: 0.6; }
+
+/* -------------------------------------------------------------- Panel -- */
+
+.panel-form { display: grid; gap: 0.8rem; }
+.panel-form .field-row > .field { flex: 1 1 5rem; }
+.panel-form .field input, .panel-form .field select { width: 100%; }
+.panel-label { margin: 0.4rem 0 0; font-size: var(--fs-label); font-weight: 700; text-transform: uppercase;
+               letter-spacing: 0.08em; color: var(--muted); }
+
+.code {
+    font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: var(--fs-table);
+    font-weight: 600;
+    color: var(--text-strong);
+}
+.code.is-new { color: var(--plan-selected); }
+.code-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.code-chips .code { padding: 0.15rem 0.45rem; border-radius: 6px; background: var(--bg-alt); }
+
+.recode-confirm { display: grid; gap: 0.6rem; }
+.recode-confirm h3 { margin: 0; }
+.recode-list, .change-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.35rem;
+                             max-height: 22rem; overflow: auto; }
+.change-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; font-size: var(--fs-text); }
+
+/* The bar that says there is something to save, over the plan. */
+.save-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.7rem 1rem;
+    border: 1px solid var(--warning);
+    border-radius: var(--radius-sm);
+    background: var(--panel);
+    box-shadow: var(--shadow-sm);
+}
+.save-count { font-weight: 700; color: var(--warning); margin-right: auto; }
+.save-bar input { width: 18rem; max-width: 100%; }
+
+/* ------------------------------------------------------------- Narrow -- */
+
+@media (max-width: 1100px) {
+    .plan-layout { grid-template-columns: 1fr; }
+    .plan-panel { position: static; }
+}

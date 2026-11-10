@@ -5,7 +5,7 @@
  * FILES— are the same for every BearSoft product. Only the network part lives
  * here; decoding the token belongs to `js/auth.js`.
  */
-import { AUTH_URL, AUTH_URL_LOCAL, STORAGE_TOKEN_KEY } from '../config.js';
+import { AUTH_URL, AUTH_URL_LOCAL, STORAGE_TOKEN_KEY } from '/js/config.js';
 import { resolveBases, request } from './apiClient.js';
 
 const BASES = resolveBases({ remote: AUTH_URL, local: AUTH_URL_LOCAL });
