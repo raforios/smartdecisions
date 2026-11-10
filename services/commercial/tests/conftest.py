@@ -48,7 +48,7 @@ _DOCUMENT = _load('parameters_document', _DOCUMENT_READER)
 # them on import: no AWS and no simulated table. That is why the service's
 # modules are imported here, after the values, and not with the others.
 # pylint: disable=wrong-import-position,ungrouped-imports
-from services import utils as _utils  # noqa: E402
+from core import utils as _utils
 
 _utils._SERVICE_PARAMETERS.update(_DOCUMENT.values('commercial'))  # pylint: disable=protected-access
 

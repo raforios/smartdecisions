@@ -9,6 +9,9 @@
 from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Body, Depends, Path, Request
 
+from core.db_connection import GET_DB_DEPENDENCY
+from core.logger_config import custom_logger as logger
+from core.security import get_current_user, require_roles
 from controllers.billing_returns import (
     cancel_credit_note_controller,
     credit_note_qr_controller,
@@ -25,9 +28,6 @@ from schemas.billing_returns import (
     SaleReturnIn
 )
 from schemas.billing_siat import InvoiceQrOut
-from services.db_connection import GET_DB_DEPENDENCY
-from services.logger_config import custom_logger as logger
-from services.security import get_current_user, require_roles
 
 router = APIRouter(prefix = '/v1/billing/sales', tags = ['Billing — Returns'])
 

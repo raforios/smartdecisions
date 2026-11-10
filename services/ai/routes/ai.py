@@ -5,6 +5,13 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Path, Request, status
 
+from core.logger_config import custom_logger as logger
+from core.security import (
+    get_current_owner,
+    get_current_payload,
+    require_roles,
+    resolve_owner
+)
 from controllers.ai import (
     delete_role_controller,
     explain_controller,
@@ -23,13 +30,6 @@ from schemas.ai import (
     RoleSummary,
     RoleSwitch,
     VIEW_PATTERN
-)
-from services.logger_config import custom_logger as logger
-from services.security import (
-    get_current_owner,
-    get_current_payload,
-    require_roles,
-    resolve_owner
 )
 
 

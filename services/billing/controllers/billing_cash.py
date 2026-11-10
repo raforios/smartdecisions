@@ -9,6 +9,7 @@
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.utils import audit_event, handle_service_errors
 from schemas.billing_cash import (
     CashAlertsResponse,
     CashOpenIn,
@@ -22,7 +23,6 @@ from schemas.billing_cash import (
 )
 from services import billing_cash
 from services.billing_cash import TillFilter, Viewer
-from services.utils import audit_event, handle_service_errors
 
 SERVICE = 'BILLING'
 

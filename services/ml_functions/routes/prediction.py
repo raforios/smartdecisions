@@ -2,8 +2,8 @@
     Prediction: routes handler
 '''
 from fastapi import APIRouter, Depends
-from services.security import get_current_user
-from services.logger_config import custom_logger as logger
+from core.security import get_current_user
+from core.logger_config import custom_logger as logger
 from controllers.prediction import (
     compute_cost_linear_regression,
     compute_gradient_linear_regression,

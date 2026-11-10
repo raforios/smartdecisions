@@ -12,6 +12,7 @@ from typing import Any
 import pandas as pd
 from boto3.resources.base import ServiceResource
 
+from core.logger_config import custom_logger as logger
 from controllers.common import (
     store_new_or_known,
     API_ORIGIN,
@@ -33,7 +34,6 @@ from services.commercial_utils import (
     get_owned_dataset,
     read_stored_frame
 )
-from services.logger_config import custom_logger as logger
 from services.modules import sales_profile
 
 # A sales line IS its invoice and its product: one line per product per

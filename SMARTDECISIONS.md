@@ -183,6 +183,10 @@ En síntesis lo que es para hoy a futuro es con el cambio de hoy, las vistas ini
 > Lo escribe Claude cada vez que se detiene esperando algo. Sólo hechos
 > comprobados; el detalle vive en `docs/smartdecisions/plan.md`.
 
+**10-nov-2026.** El boilerplate de los 10 servicios propios vive en `core/`
+(`services/` queda para la lógica de negocio); pruebas y Pylint 10.00 en los 10.
+Falta que Rafael despliegue los 10.
+
 **9-nov-2026.** Punto de retomada:
 
 - **Un solo frontend para los dos productos (9-nov, publicado y recorrido

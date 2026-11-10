@@ -1,9 +1,9 @@
 '''
     Common controller for ML operations
 '''
+from core.utils import handle_operation
 from schemas.common import NormalizeFeaturesRequest, NormalizeFeaturesResponse
 from services import training
-from services.utils import handle_operation
 
 
 @handle_operation(exc_type = (ValueError, TypeError))

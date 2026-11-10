@@ -17,6 +17,12 @@ from typing import Any
 
 from boto3.resources.base import ServiceResource
 
+from core.crud import get_item_by_key, put_unique_composite_item, query_by_partition
+from core.utils import load_parameters
+from core.environment import load_and_validate_env_vars
+from core.exceptions import InvalidInputError, RegisterNotFoundError
+from core.logger_config import custom_logger as logger
+from core.utils import TARGET_TIMEZONE, get_current_time_gmt
 from models.localization import (
     ExecutedPointItem,
     ExecutedRouteItem,
@@ -35,14 +41,8 @@ from schemas.localization import (
     PlannedRouteStatusEnum
 )
 from services.common import calculate_distance, from_dynamo, new_id, to_dynamo
-from services.crud import get_item_by_key, put_unique_composite_item, query_by_partition
 from services.daily_stock import draw_down_stock
-from services.utils import load_parameters
-from services.environment import load_and_validate_env_vars
-from services.exceptions import InvalidInputError, RegisterNotFoundError
 from services.localization import get_planned_route
-from services.logger_config import custom_logger as logger
-from services.utils import TARGET_TIMEZONE, get_current_time_gmt
 
 _SETTINGS = {
     **load_and_validate_env_vars({

@@ -15,6 +15,7 @@ from typing import Any
 
 from boto3.resources.base import ServiceResource
 
+from core.utils import load_parameters
 from models.billing import LOTS_TABLE
 from schemas.billing import SaleStatus
 from schemas.billing_reports import (
@@ -23,7 +24,6 @@ from schemas.billing_reports import (
     LowStockProduct,
     TopProduct
 )
-from services.utils import load_parameters
 from services.billing import MONEY_DECIMALS, products_by_sku, read_partition
 from services.billing_payments import method_totals
 from services.billing_returns import net_of_returns

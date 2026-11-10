@@ -7,6 +7,7 @@
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.utils import audit_event, handle_service_errors
 from schemas.business_model import BusinessModelResponseSchema, BusinessModelSchema
 from schemas.projection import ProjectionSchema
 from schemas.report import (
@@ -26,7 +27,6 @@ from services.parameters import (
     set_suggested_parameter
 )
 from services.report import finance_report
-from services.utils import audit_event, handle_service_errors
 
 # Besides its own input, a controller receives what the decorators read
 # —current_user for the audit, request for the usage log— so two of them pass

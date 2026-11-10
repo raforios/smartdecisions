@@ -7,6 +7,7 @@
 '''
 import pytest
 
+from core.exceptions import InvalidInputError, ResourceNotFoundError
 from schemas.entries import (
     EntryRowSchema,
     EntryUpdateSchema,
@@ -16,7 +17,6 @@ from schemas.entries import (
 )
 from schemas.finance import FinanceError
 from services import entries, finance
-from services.exceptions import InvalidInputError, ResourceNotFoundError
 
 ACME, OTHER, ANA = 'acme', 'otra', 'ana@acme.com'
 RENT = {'date': '2026-03', 'periodicity': 'MONTHLY', 'account_code': '6.1.03', 'amount': 3500}

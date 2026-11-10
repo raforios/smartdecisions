@@ -12,6 +12,7 @@
 '''
 from xml.etree.ElementTree import Element, SubElement, tostring
 
+from core.logger_config import custom_logger as logger
 from schemas.billing import InvoiceLine, SaleLineOut
 from schemas.billing_returns import (
     DETAIL_ORIGINAL,
@@ -28,7 +29,6 @@ from services.billing_invoice_xml import (
     require_homologated,
     xml_amount
 )
-from services.logger_config import custom_logger as logger
 
 ROOT_ELEMENT = 'notaFiscalComputarizadaCreditoDebito'
 

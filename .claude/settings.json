@@ -19,8 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(git commit*)",
-            "command": "cd /Users/rafael/Work/projects/back/SmartBear/app && ../.venv/bin/python tools/verification/pre_commit_check.py",
+            "command": "jq -r '.tool_input.command // empty' | grep -qE '(^|[;&|][[:space:]]*)git commit' || exit 0; cd /Users/rafael/Work/projects/back/SmartBear/app && ../.venv/bin/python tools/verification/pre_commit_check.py",
             "timeout": 900,
             "statusMessage": "Verificando los servicios del commit..."
           }

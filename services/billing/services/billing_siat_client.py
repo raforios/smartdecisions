@@ -34,6 +34,9 @@ from zeep import Client, Settings
 from zeep.exceptions import Error as ZeepError
 from zeep.transports import Transport
 
+from core.environment import load_and_validate_env_vars
+from core.exceptions import InvalidInputError, ServiceUnavailableError
+from core.logger_config import custom_logger as logger
 from schemas.billing import (
     EMISSION_ONLINE,
     INVOICE_WITH_TAX_CREDIT,
@@ -45,9 +48,6 @@ from schemas.billing import (
 )
 from schemas.billing_returns import INVOICE_TYPE_ADJUSTMENT, SECTOR_DOCUMENT_CREDIT_DEBIT
 from schemas.billing_siat import CatalogEntry, SiatCatalog
-from services.environment import load_and_validate_env_vars
-from services.exceptions import InvalidInputError, ServiceUnavailableError
-from services.logger_config import custom_logger as logger
 
 # The delegation token and the system code are credentials: they live in the
 # environment and never in the source. `SIAT_ENVIRONMENT` is the SIN's

@@ -13,14 +13,14 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
+from core.db_connection import GET_DB_DEPENDENCY
+from core.security import get_current_payload
 from controllers import sellers as controllers
 from main import app
 from schemas.clients import ClientSource
 from schemas.sellers import SellerListResponseSchema, SellerResponseSchema, SellerUpdateSchema
 from services import clients as master
 from services import sellers as seller_master
-from services.db_connection import GET_DB_DEPENDENCY
-from services.security import get_current_payload
 from tests.test_clients import OWNER, _FakeResource
 
 

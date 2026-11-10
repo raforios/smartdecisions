@@ -2,6 +2,7 @@
     Recent activity controllers.
 '''
 from boto3.resources.base import ServiceResource
+from core.utils import handle_service_errors
 from schemas.activity import (
     ActivityQuerySchema,
     ActivityResponseSchema,
@@ -9,7 +10,6 @@ from schemas.activity import (
     MyChangesResponseSchema
 )
 from services.activity import my_changes, recent_activity
-from services.utils import handle_service_errors
 
 
 @handle_service_errors

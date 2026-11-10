@@ -13,8 +13,8 @@
 import json
 from typing import Any
 
-from services.environment import load_and_validate_env_vars
-from services.logger_config import custom_logger as logger
+from core.environment import load_and_validate_env_vars
+from core.logger_config import custom_logger as logger
 
 DEFAULT_MAX_BODY_CHARS = 2000
 TRUNCATION_MARKER = '…[truncado por EVENTS]'

@@ -12,15 +12,15 @@ from typing import Any
 import pytest
 from botocore.exceptions import ClientError
 
-from schemas.files import S3FileRequest
-from services import files
-from services.exceptions import (
+from core.exceptions import (
     ForbiddenError,
     InvalidInputError,
     ResourceNotFoundError,
     ServiceUnavailableError
 )
-from services.utils import handle_aws_client_error
+from core.utils import handle_aws_client_error
+from schemas.files import S3FileRequest
+from services import files
 
 
 @pytest.fixture(autouse = True)

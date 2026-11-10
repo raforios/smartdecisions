@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from services.exceptions import ServiceUnavailableError
+from core.exceptions import ServiceUnavailableError
 from services.routing import road_trip
 
 

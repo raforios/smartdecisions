@@ -6,6 +6,9 @@
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.exceptions import ResourceNotFoundError
+from core.logger_config import custom_logger as logger
+from core.utils import audit_event, handle_service_errors
 from controllers.common import (
     CompanionSpec,
     LoadContext,
@@ -16,11 +19,8 @@ from controllers.common import (
 )
 from schemas.channels import LoadMode
 from schemas.commercial import IngestError, StockDayItem, StockDayResponse, StockResponse
-from services.exceptions import ResourceNotFoundError
-from services.logger_config import custom_logger as logger
 from services.commercial_utils import get_owned_dataset
 from services.stock_load import parse_and_validate, stock_of_day, validate_rows
-from services.utils import audit_event, handle_service_errors
 
 # The controller signature is fixed by the route —resource, dataset, file,
 # name, caller, request— and the three companion controllers are the same

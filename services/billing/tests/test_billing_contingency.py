@@ -18,6 +18,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from core import utils
+from core.exceptions import InvalidInputError, ServiceUnavailableError
 from controllers import billing_siat as controllers
 from models.billing import OWNER_KEY, SETTINGS_TABLE, SETTING_SORT_KEY
 from schemas.billing import BillingError, Buyer, SiatReceipt
@@ -32,10 +34,9 @@ from schemas.billing_siat import (
     SiatCatalog,
     SignificantEvent
 )
-from services import billing, billing_contingency, billing_invoicing, billing_sales, utils
+from services import billing, billing_contingency, billing_invoicing, billing_sales
 from services import billing_siat_client as siat_client
 from services import billing_siat_packages as packages
-from services.exceptions import InvalidInputError, ServiceUnavailableError
 from tests.test_billing import CASHIER, OWNER, _dynamodb # pylint: disable=unused-import
 from tests.test_billing_sale_invoice import ( # pylint: disable=unused-import
     CODES,

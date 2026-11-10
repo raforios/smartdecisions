@@ -9,6 +9,7 @@
     invoice (`billing_invoice_pdf.py`), whose pieces it uses, and every word on
     it is a parameter of `billing_parameters`.
 '''
+from core.utils import load_parameters
 from schemas.billing import BillingSettings, SaleLineOut, SaleNoteOut
 from schemas.billing_returns import CreditNoteOut
 from schemas.billing_siat import InvoiceState
@@ -28,7 +29,6 @@ from services.billing_invoice_pdf import (
     print_issuer,
     stamp_text
 )
-from services.utils import load_parameters
 
 TEXTS = load_parameters({code: str for code in (
     'BILLING_PDF_NOTE_TITLE', 'BILLING_PDF_NOTE_NUMBER', 'BILLING_PDF_NOTE_INVOICE_NUMBER',

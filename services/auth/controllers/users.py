@@ -7,6 +7,8 @@ from typing import Any
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from core.exceptions import ForbiddenError, UnauthorizedError
+from core.logger_config import custom_logger as logger
 from schemas.auth import AuthError, SignupResponse
 from schemas.role import Role
 from schemas.users import (
@@ -18,9 +20,7 @@ from schemas.users import (
 )
 from services import users
 from services.dynamodb import get_user_by_email
-from services.exceptions import ForbiddenError, UnauthorizedError
 from services.jwt_token import decode_access_token
-from services.logger_config import custom_logger as logger
 
 
 async def get_user_payload(

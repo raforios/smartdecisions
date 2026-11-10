@@ -3,6 +3,9 @@
 '''
 from fastapi import APIRouter, Depends, status
 from boto3.resources.base import ServiceResource
+from core.db_connection import GET_DB_DEPENDENCY
+from core.logger_config import custom_logger as logger
+from core.security import get_current_user, require_roles
 from schemas.activity import (
     ActivityQuerySchema,
     ActivityResponseSchema,
@@ -11,9 +14,6 @@ from schemas.activity import (
 )
 from schemas.audit import READ_ROLES
 from controllers.activity import get_my_changes_controller, get_recent_activity_controller
-from services.db_connection import GET_DB_DEPENDENCY
-from services.logger_config import custom_logger as logger
-from services.security import get_current_user, require_roles
 
 router = APIRouter(prefix = '/v1/events', tags = ['Events'])
 

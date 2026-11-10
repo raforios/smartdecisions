@@ -6,6 +6,7 @@
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.utils import audit_event, handle_service_errors
 from controllers.common import caller_token
 from schemas.optimization import (
     DEFAULT_PLAN_DAYS,
@@ -23,7 +24,6 @@ from services.optimization import (
 from services.analytics_utils import get_dataset_metadata
 from services.commercial_utils import read_stored_frame
 from services.localization_sources import SalesSource, plans_by_seller
-from services.utils import audit_event, handle_service_errors
 
 
 @handle_service_errors('COMMERCIAL')

@@ -16,6 +16,8 @@ from typing import Final
 
 import pandas as pd
 
+from core.logger_config import custom_logger as logger
+from core.utils import load_parameters
 from schemas.commercial import (
     COLLECTION_COLUMNS,
     SALES_COLUMNS,
@@ -34,8 +36,6 @@ from services.load_contract import (
     validate
 )
 from services.load_files import read_file
-from services.logger_config import custom_logger as logger
-from services.utils import load_parameters
 
 
 # ---------------------------------------------------------------------------

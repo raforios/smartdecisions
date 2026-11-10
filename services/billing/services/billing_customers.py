@@ -11,12 +11,12 @@ from typing import Any
 
 from boto3.resources.base import ServiceResource
 
+from core.exceptions import RegisterNotFoundError
+from core.logger_config import custom_logger as logger
 from models.billing import CUSTOMERS_TABLE, CUSTOMER_SORT_KEY, OWNER_KEY
 from schemas.billing import BillingError, Buyer
 from schemas.billing_customers import CustomerEdit, CustomerOut, CustomersResponse
 from services.billing import from_dynamo, now_iso, read_partition, to_dynamo, write_item
-from services.exceptions import RegisterNotFoundError
-from services.logger_config import custom_logger as logger
 
 # What a buyer carries that the customer keeps.
 REMEMBERED_FIELDS = ('name', 'document_type', 'email')

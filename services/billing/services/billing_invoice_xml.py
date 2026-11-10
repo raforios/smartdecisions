@@ -27,6 +27,9 @@ from xml.etree.ElementTree import Element, SubElement, tostring
 
 from lxml import etree
 
+from core.exceptions import InvalidInputError
+from core.logger_config import custom_logger as logger
+from core.utils import load_parameters
 from schemas.billing import (
     BillingError,
     InvoiceContext,
@@ -34,9 +37,6 @@ from schemas.billing import (
     SaleNoteOut
 )
 from services.billing_payments import paid_by_card
-from services.exceptions import InvalidInputError
-from services.logger_config import custom_logger as logger
-from services.utils import load_parameters
 
 ROOT_ELEMENT = 'facturaComputarizadaCompraVenta'
 

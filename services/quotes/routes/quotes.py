@@ -5,6 +5,8 @@ from datetime import date as date_type
 
 from fastapi import APIRouter, Depends, Query, Request, status
 
+from core.logger_config import custom_logger as logger
+from core.security import get_current_owner
 from controllers.quotes import (
     get_bench_controller,
     get_rate_on_controller,
@@ -20,8 +22,6 @@ from schemas.quotes import (
     RateForecast,
     SyncResult
 )
-from services.logger_config import custom_logger as logger
-from services.security import get_current_owner
 
 
 router = APIRouter(prefix = '/v1/quotes', tags = ['Quotes'])

@@ -2,6 +2,8 @@
     Auth: routes handler
 '''
 from fastapi import APIRouter, Depends, status
+from core.logger_config import custom_logger as logger
+from core.exceptions import UnauthorizedError
 from schemas.auth import AuthError, LoginRequest, SignupResponse, Token
 from schemas.users import UserRequest
 from controllers.users import (
@@ -10,9 +12,7 @@ from controllers.users import (
     get_current_admin_user,
     record_login
 )
-from services.logger_config import custom_logger as logger
 from services.jwt_token import create_access_token
-from services.exceptions import UnauthorizedError
 
 router = APIRouter(prefix = '/v1/auth', tags = ['Authentication'])
 

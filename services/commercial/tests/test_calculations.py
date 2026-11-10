@@ -7,10 +7,10 @@ import pandas as pd
 import pytest
 import requests
 
+from core.exceptions import ServiceUnavailableError
 from schemas.analytics import AnalyticsError
 from services import calculations
 from services.calculations import ask_ml_functions, rank_tiers
-from services.exceptions import ServiceUnavailableError
 from services.optimization import build_client_points
 from services.segmentation import build_segmentation
 

@@ -8,8 +8,8 @@ import importlib
 
 import pytest
 
+from core.exceptions import InvalidInputError, RegisterAlreadyExistsError
 from schemas.companies import CompanyError, CompanyRequest, CompanyUpdateRequest, Sector
-from services.exceptions import InvalidInputError, RegisterAlreadyExistsError
 
 
 @pytest.fixture(name = 'companies')

@@ -22,6 +22,11 @@ from fastapi.responses import HTMLResponse
 from mangum import Mangum
 import uvicorn
 
+from core.api_exceptions import setup_exception_handlers
+from core.db_connection import dynamodb_resource
+from core.security import require_roles
+from core.environment import load_and_validate_env_vars
+from core.logger_config import custom_logger as logger
 from routes.billing import router as billing_router
 from routes.billing_cash import router as billing_cash_router
 from routes.billing_customers import router as billing_customers_router
@@ -32,11 +37,6 @@ from routes.billing_siat import router as billing_siat_router
 
 from schemas.health import TableHealth, TablesHealthResponse, TableState
 from services import billing_contingency
-from services.api_exceptions import setup_exception_handlers
-from services.db_connection import dynamodb_resource
-from services.security import require_roles
-from services.environment import load_and_validate_env_vars
-from services.logger_config import custom_logger as logger
 
 
 ENV_VARS = load_and_validate_env_vars(

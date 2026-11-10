@@ -2,10 +2,10 @@
     The checks a sale passes before any stock moves: who the buyer is, the
     card number it may carry, and lines that are not repeated.
 '''
+from core.exceptions import InvalidInputError
 from schemas.billing import BillingError, PaymentMethod, SaleLineIn, SaleNoteIn, SettingsResponse
 from services.billing_payments import paid_by_card
 from services.billing_siat import mask_card
-from services.exceptions import InvalidInputError
 
 # The CI and the NIT in the SIN's catalogue of identity documents: the two the
 # norm asks to be numeric.

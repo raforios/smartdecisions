@@ -9,6 +9,7 @@
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.utils import audit_event, handle_service_errors
 from schemas.sellers import SellerListResponseSchema, SellerResponseSchema, SellerUpdateSchema
 from services.sellers import (
     list_sellers,
@@ -16,7 +17,6 @@ from services.sellers import (
     to_seller_response,
     update_seller
 )
-from services.utils import audit_event, handle_service_errors
 
 
 @handle_service_errors('COMMERCIAL')

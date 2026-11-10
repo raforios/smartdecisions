@@ -11,6 +11,8 @@ from unittest.mock import patch
 import pytest
 from moto import mock_aws
 
+from core.exceptions import InvalidInputError, RegisterNotFoundError
+from core.utils import get_current_time_gmt
 from schemas.localization import (
     ExecutedPointCreateSchema,
     ExecutedRouteCreateSchema,
@@ -24,8 +26,6 @@ from schemas.localization import (
     VisitOutcome
 )
 from services import localization, localization_executed as executed
-from services.exceptions import InvalidInputError, RegisterNotFoundError
-from services.utils import get_current_time_gmt
 from tests.dynamo_helpers import build_resource
 
 OWNER = 'yo@miempresa.com'

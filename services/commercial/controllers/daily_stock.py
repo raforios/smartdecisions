@@ -6,6 +6,7 @@
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.utils import audit_event, handle_service_errors
 from controllers.stock import stock_items_of_day
 from schemas.daily_stock import (
     DailyStockFromIngestSchema,
@@ -20,7 +21,6 @@ from services.daily_stock import (
     to_daily_stock_response
 )
 from services.day_statistics import day_statistics
-from services.utils import audit_event, handle_service_errors
 
 
 @handle_service_errors('COMMERCIAL')

@@ -16,6 +16,11 @@ from typing import Any
 import pandas as pd
 from boto3.resources.base import ServiceResource
 
+from core.crud import find_item_by_key, query_by_partition
+from core.environment import load_and_validate_env_vars
+from core.exceptions import ResourceNotFoundError
+from core.logger_config import custom_logger as logger
+from core.utils import get_current_time_gmt
 from models.products import ProductItem
 from schemas.products import (
     ProductError,
@@ -27,12 +32,7 @@ from schemas.products import (
     ProductUpsertSchema
 )
 from services.commercial_utils import from_dynamo, to_dynamo
-from services.crud import find_item_by_key, query_by_partition
-from services.environment import load_and_validate_env_vars
-from services.exceptions import ResourceNotFoundError
-from services.logger_config import custom_logger as logger
 from services.master_records import MasterTable, clean_attributes, feed_master, is_empty
-from services.utils import get_current_time_gmt
 
 ENV_VARS = load_and_validate_env_vars({'DYNAMODB_TABLE_NAME_COMMERCIAL_PRODUCTS': str})
 PRODUCTS = MasterTable(name = ENV_VARS['DYNAMODB_TABLE_NAME_COMMERCIAL_PRODUCTS'], key = 'sku')

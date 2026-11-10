@@ -20,6 +20,11 @@ from boto3.resources.base import ServiceResource
 from fastapi import Request
 from pydantic import BaseModel
 
+from core.utils import load_parameters
+from core.environment import load_and_validate_env_vars
+from core.exceptions import ResourceNotFoundError, ServiceUnavailableError
+from core.logger_config import custom_logger as logger
+from core.utils import DEFAULT_BUCKET_PATH, delete_stored_file, store_file
 from schemas.commercial import (
     TEMPLATE_VERSION,
     IngestError,
@@ -32,9 +37,6 @@ from schemas.clients import ClientSource
 from schemas.products import ProductSource
 from services.clients import CLIENT_FRAME_COLUMNS, sync_master
 from services.products import sync_products
-from services.utils import load_parameters
-from services.environment import load_and_validate_env_vars
-from services.exceptions import ResourceNotFoundError, ServiceUnavailableError
 from services.load_files import serialize_dataframe
 from services.modules import sales_profile
 from services.commercial_utils import (
@@ -44,8 +46,6 @@ from services.commercial_utils import (
     persist_dataset,
     read_stored_frame
 )
-from services.logger_config import custom_logger as logger
-from services.utils import DEFAULT_BUCKET_PATH, delete_stored_file, store_file
 
 # Only a slice of the issues travels in the JSON response / DynamoDB item
 # (400 KB limit); the full set lives in the rejected CSV in S3.

@@ -15,6 +15,8 @@
 
 import pandas as pd
 
+from core.utils import load_parameters
+from core.logger_config import custom_logger as logger
 from schemas.modules import AnalysisUnavailable
 from schemas.analytics import (
     GrowthBlock,
@@ -25,14 +27,12 @@ from schemas.analytics import (
 )
 
 from services.currency import money_row, money_sums
-from services.utils import load_parameters
 from services.analytics_utils import (
     AMOUNT,
     dates,
     percent_change,
     ratio
 )
-from services.logger_config import custom_logger as logger
 
 # A seasonality index built on less than a full year compares months that never
 # repeat, which reads as signal when it is noise.

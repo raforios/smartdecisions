@@ -5,6 +5,7 @@
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.utils import audit_event, handle_service_errors
 from schemas.objectives import CommercialPolicyResponse, CommercialPolicySchema
 from schemas.receivables import CreditPolicyRequest, CreditPolicyResponse
 from services.analytics_utils import (
@@ -15,7 +16,6 @@ from services.analytics_utils import (
 )
 from services.objectives import resolve_policy as resolve_commercial_policy
 from services.receivables import resolve_policy
-from services.utils import audit_event, handle_service_errors
 
 
 @handle_service_errors('COMMERCIAL')

@@ -7,8 +7,8 @@ from fastapi.testclient import TestClient
 from jose import jwt
 
 import main
-from services import security
-from services.db_connection import GET_DB_DEPENDENCY
+from core import security
+from core.db_connection import GET_DB_DEPENDENCY
 
 URL = f'{main.DOCS_BASE}/my-changes'
 RECORDS = [

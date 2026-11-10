@@ -57,7 +57,7 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 | `DELETE` | `/v1/finance/entries` | Removes one **amount**. |
 | `DELETE` | `/v1/finance/periods` | Empties a **period**. |
 
-**Queued loads.** SmartBilling does not call `loads` over HTTP: it leaves each load (path, body and the cashier's `Authorization`) in the FIFO queue `finance-live-requests.fifo`, grouped by shop. The queue triggers this Lambda (batch of 1, `ReportBatchItemFailures`), and the QUEUED REQUESTS block of `services/utils.py` serves each record through Mangum as the HTTP request it stands for. A load not answered with a 2xx is retried, and after 3 receives waits in `finance-live-requests-dlq.fifo` (kept 14 days). Created by `ci/api/create_queues.sh`.
+**Queued loads.** SmartBilling does not call `loads` over HTTP: it leaves each load (path, body and the cashier's `Authorization`) in the FIFO queue `finance-live-requests.fifo`, grouped by shop. The queue triggers this Lambda (batch of 1, `ReportBatchItemFailures`), and the QUEUED REQUESTS block of `core/utils.py` serves each record through Mangum as the HTTP request it stands for. A load not answered with a 2xx is retried, and after 3 receives waits in `finance-live-requests-dlq.fifo` (kept 14 days). Created by `ci/api/create_queues.sh`.
 
 ### Report, Projection and Parameters
 
@@ -108,7 +108,7 @@ python -m tools.seeds.seed_finance --yes
 
 The service's business values live in the `finance_parameters` table (one item per code),
 not in `.env`. They are read by `load_parameters`, from the SERVICE PARAMETERS
-block at the end of `services/utils.py`, once per container; a value changed in
+block at the end of `core/utils.py`, once per container; a value changed in
 the table is picked up by the containers that start afterwards. If one is
 missing, the service does not start. What each client sets lives in `finance_client_parameters`. Definition: the `finance` rows of
 `docs/parametros.md`. Seed:

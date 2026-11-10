@@ -5,7 +5,7 @@
 
     Checks:
         tests        pytest, all green
-        pylint       10.00/10 over services/ controllers/ routes/ schemas/ tests/
+        pylint       10.00/10 over core/ services/ controllers/ routes/ schemas/ tests/
         signatures   one parameter per line (tools/verification/check_signatures.py)
         type-hints   every parameter and return annotated (tests exempt)
         size         no own file at or above the split threshold (800 lines)
@@ -136,7 +136,7 @@ def check_code_language(service: Path) -> tuple[bool, str]:
 
 # The service's own packages: an import from one of them is an import of the
 # service's own code, not of a library.
-OWN_PACKAGES = ('controllers', 'models', 'routes', 'schemas', 'services')
+OWN_PACKAGES = ('controllers', 'core', 'models', 'routes', 'schemas', 'services')
 
 
 def check_private_imports(service: Path) -> tuple[bool, str]:
@@ -166,7 +166,7 @@ def check_private_imports(service: Path) -> tuple[bool, str]:
 
 # Where the logic lives (CLAUDE.md §3). Routes and controllers carry the
 # endpoint's description, the one Swagger shows (Rafael, 4-nov-2026).
-DOCUMENTED_LAYERS = ('services', 'schemas')
+DOCUMENTED_LAYERS = ('core', 'services', 'schemas')
 
 
 def _parameters(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:

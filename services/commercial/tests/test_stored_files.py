@@ -8,8 +8,9 @@ from typing import Any
 import pandas as pd
 import pytest
 
-from services import commercial_utils, utils
-from services.exceptions import ServiceUnavailableError
+from core import utils
+from core.exceptions import ServiceUnavailableError
+from services import commercial_utils
 
 
 class _Response:  # pylint: disable=too-few-public-methods

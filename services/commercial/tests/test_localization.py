@@ -7,6 +7,11 @@
 import pytest
 from moto import mock_aws
 
+from core.exceptions import (
+    InvalidInputError,
+    RegisterAlreadyExistsError,
+    RegisterNotFoundError
+)
 from schemas.localization import (
     InferPlannedRouteSchema,
     LocalizationError,
@@ -19,11 +24,6 @@ from schemas.localization import (
     PlannedRouteUpdateSchema
 )
 from services import localization, localization_sources as sources
-from services.exceptions import (
-    InvalidInputError,
-    RegisterAlreadyExistsError,
-    RegisterNotFoundError
-)
 from tests.dynamo_helpers import build_resource
 
 OWNER = 'yo@miempresa.com'

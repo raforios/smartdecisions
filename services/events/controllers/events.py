@@ -3,6 +3,7 @@
 '''
 from boto3.resources.base import ServiceResource
 
+from core.utils import handle_service_errors
 from schemas.audit import (
     AuditRecordCreateSchema,
     AuditRecordQuerySchema,
@@ -16,7 +17,6 @@ from schemas.usage_log import (
     UsageLogsPage
 )
 from services.events import AUDIT_LOG, USAGE_LOG, list_events, record_event
-from services.utils import handle_service_errors
 
 
 @handle_service_errors

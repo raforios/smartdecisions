@@ -22,6 +22,12 @@ from typing import Any
 import pandas as pd
 from boto3.resources.base import ServiceResource
 
+from core.crud import find_item_by_key, query_by_partition
+from core.utils import load_parameters
+from core.environment import load_and_validate_env_vars
+from core.exceptions import ResourceNotFoundError
+from core.logger_config import custom_logger as logger
+from core.utils import get_current_time_gmt
 from models.clients import ClientItem
 from schemas.clients import (
     ClientError,
@@ -34,10 +40,6 @@ from schemas.clients import (
     ClientUpsertSchema
 )
 from schemas.commercial import CLIENT_SALES_ATTRIBUTES
-from services.crud import find_item_by_key, query_by_partition
-from services.utils import load_parameters
-from services.environment import load_and_validate_env_vars
-from services.exceptions import ResourceNotFoundError
 from services.commercial_utils import from_dynamo, to_dynamo
 from services.master_records import (
     NO_COORDINATE,
@@ -46,9 +48,7 @@ from services.master_records import (
     feed_master,
     is_empty
 )
-from services.logger_config import custom_logger as logger
 from services.sellers import register_sellers, sellers_from_frame
-from services.utils import get_current_time_gmt
 
 
 ENV_VARS = {

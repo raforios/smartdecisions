@@ -13,6 +13,7 @@ from typing import Any
 import pandas as pd
 import pytest
 
+from core.exceptions import ResourceNotFoundError
 from controllers import clients as controllers
 from schemas.clients import (
     ClientBulkUpsertSchema,
@@ -25,7 +26,6 @@ from schemas.clients import (
     FieldClientSchema
 )
 from services import clients as master
-from services.exceptions import ResourceNotFoundError
 
 
 class _FakeTable:

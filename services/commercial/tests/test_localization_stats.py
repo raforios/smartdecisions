@@ -6,6 +6,8 @@
 import pytest
 from moto import mock_aws
 
+from core.exceptions import InvalidInputError, RegisterNotFoundError
+from core.utils import get_current_time_gmt
 from schemas.daily_stock import DailyStockLoadSchema, SaleItemSchema, StockItemLoadSchema
 from schemas.localization import (
     ExecutedPointCreateSchema,
@@ -21,8 +23,6 @@ from schemas.localization import (
 from services import daily_stock
 from services import localization, localization_executed as executed, localization_stats as stats
 from services.day_statistics import day_statistics, route_km
-from services.exceptions import InvalidInputError, RegisterNotFoundError
-from services.utils import get_current_time_gmt
 from tests.dynamo_helpers import build_resource
 
 # Wide enough that no reading is ever outside it: the file door has no fence.

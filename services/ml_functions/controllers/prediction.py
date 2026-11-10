@@ -2,10 +2,10 @@
     Prediction controller
 '''
 
+from core.utils import handle_operation
 from services import training
 from services.forecast import DEFAULT_MODELS, ForecastSpec, choose_and_project
 from services.forecast_bench import BenchSpec, compare, replays
-from services.utils import handle_operation
 from schemas.prediction import (
     ComputeCostLinearRequest,
     ComputeCostLinearResponse,

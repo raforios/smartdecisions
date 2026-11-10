@@ -15,6 +15,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from core import utils
+from core.exceptions import InvalidInputError, RegisterNotFoundError
 from controllers import billing_manual as controllers
 from models.billing import OWNER_KEY, SALES_TABLE, SALE_SORT_KEY, SETTINGS_TABLE, SETTING_SORT_KEY
 from schemas.billing import Buyer, SaleNoteOut
@@ -37,9 +39,8 @@ from schemas.billing_siat import (
     RecoveryOut,
     SiatCatalog
 )
-from services import billing, billing_contingency, billing_manual, utils
+from services import billing, billing_contingency, billing_manual
 from services import billing_siat_packages as packages
-from services.exceptions import InvalidInputError, RegisterNotFoundError
 from tests.test_billing import CASHIER, OWNER, _dynamodb # pylint: disable=unused-import
 from tests.test_billing_contingency import NEW_CODES, _tax_office # pylint: disable=unused-import
 from tests.test_billing_sale_invoice import ( # pylint: disable=unused-import

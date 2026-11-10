@@ -14,15 +14,15 @@ from mangum import Mangum
 
 import uvicorn
 
+from core.api_exceptions import setup_exception_handlers
+from core.logger_config import custom_logger as logger
+from core.environment import load_and_validate_env_vars
 from routes.classification import router as classification_router
 from routes.prediction import router as prediction_router
 from routes.routing import router as routing_router
 from routes.common import router as common_router
 
-from services.api_exceptions import setup_exception_handlers
-from services.logger_config import custom_logger as logger
 
-from services.environment import load_and_validate_env_vars
 
 ENV_VARS = load_and_validate_env_vars(
     env_vars = {

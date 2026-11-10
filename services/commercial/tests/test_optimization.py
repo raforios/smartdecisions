@@ -5,8 +5,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from core.exceptions import InvalidInputError
 from schemas.optimization import OptimizationError
-from services.exceptions import InvalidInputError
 from services.optimization import (
     assign_days,
     build_client_points,

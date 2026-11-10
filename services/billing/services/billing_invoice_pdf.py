@@ -20,10 +20,10 @@ from typing import Final
 import segno
 from fpdf import FPDF
 
+from core.utils import load_parameters
 from schemas.billing import BillingSettings, Buyer, SaleLineOut, SaleNoteOut, SaleStatus
 from schemas.billing_siat import SaleInvoice
 from services.billing_invoicing import QR_ERROR_CORRECTION, invoice_lines
-from services.utils import load_parameters
 
 TEXTS = load_parameters({code: str for code in (
     'BILLING_PDF_TITLE', 'BILLING_PDF_SUBTITLE', 'BILLING_PDF_HEAD_OFFICE', 'BILLING_PDF_BRANCH',

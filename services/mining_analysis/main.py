@@ -17,14 +17,14 @@ from mangum import Mangum
 import uvicorn
 
 # Router of this microservice
+from core.api_exceptions import setup_exception_handlers
+from core.security import require_roles
+from core.logger_config import custom_logger as logger
+from core.environment import load_and_validate_env_vars
 from routes.mining_analysis import router as mining_router
 from routes.market import router as market_router
 
 from schemas.health import TableHealth, TablesHealthResponse, TableState
-from services.api_exceptions import setup_exception_handlers
-from services.security import require_roles
-from services.logger_config import custom_logger as logger
-from services.environment import load_and_validate_env_vars
 
 from services.market_sources import scheduled_sync
 

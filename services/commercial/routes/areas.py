@@ -6,6 +6,9 @@
 from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Depends, Path, Request, status
 
+from core.db_connection import GET_DB_DEPENDENCY
+from core.logger_config import custom_logger as logger
+from core.security import get_current_owner
 from controllers.analytics import stock_history_controller
 from controllers.client_card import client_card_controller, client_list_controller
 from controllers.dashboard import dashboard_controller
@@ -15,9 +18,6 @@ from schemas.client import ClientCardResponse, ClientListResponse
 from schemas.dashboard import DashboardResponse
 from schemas.purchases import PurchasesResponse
 from schemas.stock import StockHistoryResponse
-from services.db_connection import GET_DB_DEPENDENCY
-from services.logger_config import custom_logger as logger
-from services.security import get_current_owner
 
 router = APIRouter(prefix = '/v1/commercial', tags = ['Analytics'])
 

@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from jose import jwt
 
 from main import app
+from core import security
 from routes import entries as entry_routes
 from routes import finance as routes
 from routes import report as report_routes
@@ -46,7 +47,7 @@ from schemas.report import (
     SuggestedParameterListResponseSchema,
     SuggestedParameterSchema
 )
-from services import entries, security
+from services import entries
 from services import report as report_service
 from tests.test_projection import PROJECTION_VALUES
 from tests.test_report import FINANCE_VALUES, GLOBAL_VALUES

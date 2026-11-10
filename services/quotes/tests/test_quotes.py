@@ -14,10 +14,10 @@ import pytest
 
 from fastapi import HTTPException
 
+from core.exceptions import ServiceUnavailableError
 from models.quotes import USD, ExchangeRateItem
 from schemas.quotes import ForecastMethod, QuotesError, RateConfidence
 from services import bcb_source, quotes, rate_forecast, usdt_source
-from services.exceptions import ServiceUnavailableError
 
 from tests.conftest import build_history
 

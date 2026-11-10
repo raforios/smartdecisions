@@ -29,6 +29,9 @@ import pandas as pd
 from boto3.resources.base import ServiceResource
 from pydantic import ValidationError
 
+from core.utils import load_parameters
+from core.exceptions import InvalidInputError, RegisterAlreadyExistsError
+from core.logger_config import custom_logger as logger
 from models.localization import (
     ExecutedRouteItem,
     PlannedPointItem,
@@ -50,8 +53,6 @@ from schemas.localization import (
     RepeatPlannedRouteSchema,
     RouteEndpointSchema
 )
-from services.utils import load_parameters
-from services.exceptions import InvalidInputError, RegisterAlreadyExistsError
 from services.localization import (
     assert_route_code_free,
     assert_sequence_free,
@@ -62,7 +63,6 @@ from services.localization import (
     insert_planned_route,
     list_planned_routes
 )
-from services.logger_config import custom_logger as logger
 from services.optimization_settings import get_route_settings
 from services.optimization import (
     assign_days,

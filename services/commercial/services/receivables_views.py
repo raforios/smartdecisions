@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from core.utils import load_parameters
 from schemas.receivables import (
     CollectionCurvePoint,
     CollectorRow,
@@ -24,7 +25,6 @@ from schemas.receivables import (
     PriorityRow
 )
 from services.analytics_utils import money, ratio
-from services.utils import load_parameters
 
 _SETTINGS = load_parameters({
     'RECEIVABLES_WATCH_DAYS': int,

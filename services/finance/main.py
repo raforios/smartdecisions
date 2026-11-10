@@ -17,16 +17,16 @@ from fastapi.responses import HTMLResponse
 from mangum import Mangum
 import uvicorn
 
+from core.api_exceptions import setup_exception_handlers
+from core.security import require_roles
+from core.environment import load_and_validate_env_vars
+from core.logger_config import custom_logger as logger
+from core.utils import serve_queued
 from routes.entries import router as entries_router
 from routes.finance import router as finance_router
 from routes.report import router as report_router
 
 from schemas.health import TableHealth, TablesHealthResponse, TableState
-from services.api_exceptions import setup_exception_handlers
-from services.security import require_roles
-from services.environment import load_and_validate_env_vars
-from services.logger_config import custom_logger as logger
-from services.utils import serve_queued
 
 ENV_VARS = load_and_validate_env_vars(
     env_vars = {
@@ -275,7 +275,7 @@ if __name__ == '__main__':
 # Lambda entry point: every invocation comes from API Gateway.
 # The Lambda answers two kinds of caller: API Gateway's HTTP events, and the
 # records of the FIFO queue SmartBilling fills, each one an HTTP request kept
-# for later (the QUEUED REQUESTS block of `services/utils.py`).
+# for later (the QUEUED REQUESTS block of `core/utils.py`).
 _asgi_handler = Mangum(app)
 
 

@@ -22,16 +22,17 @@ import re
 from datetime import date as date_type, timedelta
 from typing import Any
 
-from models.quotes import USD, ExchangeRateItem
-from schemas.quotes import ForecastMethod, QuotesError
-from services.bcb_source import SOURCE_NAME, fetch_official_rate
-from services.utils import load_parameters
-from services.exceptions import (
+from core.utils import load_parameters
+from core.exceptions import (
     InvalidInputError,
     ResourceNotFoundError,
     ServiceUnavailableError
 )
-from services.logger_config import custom_logger as logger
+from core.logger_config import custom_logger as logger
+from core.utils import get_current_time_gmt, handle_service_errors
+from models.quotes import USD, ExchangeRateItem
+from schemas.quotes import ForecastMethod, QuotesError
+from services.bcb_source import SOURCE_NAME, fetch_official_rate
 from services.quotes_utils import get_rate, put_rate, query_rates
 from services.rate_forecast import (
     BENCH_MODELS,
@@ -40,7 +41,6 @@ from services.rate_forecast import (
     run_bench
 )
 from services.usdt_source import SOURCE_NAME as USDT_SOURCE_NAME, fetch_usdt_rate
-from services.utils import get_current_time_gmt, handle_service_errors
 
 
 # Every business decision below is read from the environment and **required**.

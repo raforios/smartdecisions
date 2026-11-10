@@ -17,13 +17,13 @@ from fastapi.responses import HTMLResponse
 from mangum import Mangum
 import uvicorn
 
+from core.api_exceptions import setup_exception_handlers
+from core.security import require_roles
+from core.environment import load_and_validate_env_vars
+from core.logger_config import custom_logger as logger
 from routes.ai import router as ai_router
 
 from schemas.health import TableHealth, TablesHealthResponse, TableState
-from services.api_exceptions import setup_exception_handlers
-from services.security import require_roles
-from services.environment import load_and_validate_env_vars
-from services.logger_config import custom_logger as logger
 
 ENV_VARS = load_and_validate_env_vars(
     env_vars = {

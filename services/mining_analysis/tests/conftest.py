@@ -17,7 +17,7 @@ _SPEC.loader.exec_module(_DOCUMENT)
 # them on import: no AWS and no simulated table. That is why the service's
 # modules are imported here, after the values, and not with the others.
 # pylint: disable=wrong-import-position,ungrouped-imports
-from services import utils as _utils  # noqa: E402
+from core import utils as _utils
 
 _utils._SERVICE_PARAMETERS.update(_DOCUMENT.values('mining_analysis'))  # pylint: disable=protected-access
 

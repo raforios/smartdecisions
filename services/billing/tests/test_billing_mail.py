@@ -16,12 +16,13 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from botocore.exceptions import ClientError
 
+from core import utils
+from core.exceptions import InvalidInputError, ServiceUnavailableError
 from controllers import billing as controllers
 from models.billing import OWNER_KEY, SETTINGS_TABLE, SETTING_SORT_KEY
 from schemas.billing import BillingError, BillingSettings, Buyer, SaleNoteOut
 from schemas.billing_siat import CatalogEntry, CatalogOut, SiatCatalog
-from services import billing, billing_invoice_pdf, billing_mail, billing_sales, utils
-from services.exceptions import InvalidInputError, ServiceUnavailableError
+from services import billing, billing_invoice_pdf, billing_mail, billing_sales
 from tests.test_billing import CASHIER, OWNER, _dynamodb # pylint: disable=unused-import
 from tests.test_billing_sale_invoice import ( # pylint: disable=unused-import
     BUYER,

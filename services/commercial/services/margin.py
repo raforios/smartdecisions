@@ -15,6 +15,7 @@ from typing import Any
 
 import pandas as pd
 
+from core.utils import load_parameters
 from schemas.analytics import (
     KpiCard,
     MarginAlert,
@@ -25,7 +26,6 @@ from schemas.analytics import (
 )
 
 from services.currency import money_row, money_sums, money_total
-from services.utils import load_parameters
 from services.analytics_utils import (
     QUANTITY,
     CATEGORY,

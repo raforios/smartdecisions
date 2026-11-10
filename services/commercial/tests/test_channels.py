@@ -14,12 +14,12 @@ import pandas as pd
 import pytest
 from fastapi import HTTPException
 
+from core.utils import DEFAULT_BUCKET_PATH
 from controllers import channels
 from controllers import common
 from controllers import sales_load
 from controllers import stock as stock_controllers
 from services.load_files import read_file
-from services.utils import DEFAULT_BUCKET_PATH
 from schemas.channels import (
     CollectionRowSchema,
     SaleRowSchema,

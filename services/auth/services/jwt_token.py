@@ -5,10 +5,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from jose import jwt, JWTError
 
+from core.logger_config import custom_logger as logger
+from core.exceptions import ServiceUnavailableError
+from core.environment import load_and_validate_env_vars
 from schemas.auth import AuthError
-from services.logger_config import custom_logger as logger
-from services.exceptions import ServiceUnavailableError
-from services.environment import load_and_validate_env_vars
 
 ENV_VARS = load_and_validate_env_vars({
     'SECRET_KEY': str,

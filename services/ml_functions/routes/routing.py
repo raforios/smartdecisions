@@ -2,8 +2,8 @@
     Routing: routes handler
 '''
 from fastapi import APIRouter, Depends
-from services.security import get_current_user
-from services.logger_config import custom_logger as logger
+from core.security import get_current_user
+from core.logger_config import custom_logger as logger
 from controllers.routing import clustering_points, ordering_points
 from schemas.routing import ClustersRequest, ClustersResponse, OrderRequest, OrderResponse
 

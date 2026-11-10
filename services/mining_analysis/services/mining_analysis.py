@@ -4,7 +4,7 @@
 import unicodedata
 from typing import Any
 from boto3.resources.base import ServiceResource
-from services.utils import load_parameters
+from core.utils import load_parameters
 from services.prices_store import all_quotations
 
 

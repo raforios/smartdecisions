@@ -24,7 +24,7 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from services.environment import load_and_validate_env_vars
+from core.environment import load_and_validate_env_vars
 
 ENV_VARS = load_and_validate_env_vars(
     {

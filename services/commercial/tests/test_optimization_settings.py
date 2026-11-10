@@ -54,8 +54,8 @@ def test_the_endpoints_save_for_management_and_read_for_the_seller(dynamodb):
     from fastapi.testclient import TestClient
 
     from main import app
-    from services.db_connection import GET_DB_DEPENDENCY
-    from services.security import get_current_payload
+    from core.db_connection import GET_DB_DEPENDENCY
+    from core.security import get_current_payload
 
     app.dependency_overrides[GET_DB_DEPENDENCY] = lambda: dynamodb
     try:

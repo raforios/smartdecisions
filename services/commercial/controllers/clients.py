@@ -10,6 +10,7 @@
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.utils import audit_event, handle_service_errors
 from schemas.clients import (
     ClientBulkUpsertSchema,
     FieldClientSchema,
@@ -28,7 +29,6 @@ from services.clients import (
     update_client,
     upsert_clients
 )
-from services.utils import audit_event, handle_service_errors
 
 
 @handle_service_errors('COMMERCIAL')

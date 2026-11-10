@@ -4,9 +4,9 @@
 import pandas as pd
 import pytest
 
+from core.exceptions import InvalidInputError
 from schemas.analytics import AnalyticsError
 from services.analytics_utils import apply_date_range
-from services.exceptions import InvalidInputError
 
 
 def _frame() -> pd.DataFrame:

@@ -9,6 +9,7 @@
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.utils import audit_event, handle_service_errors
 from schemas.billing_siat import (
     CatalogOut,
     CatalogsSyncResponse,
@@ -19,7 +20,6 @@ from schemas.billing_siat import (
     SiatCodesOut
 )
 from services import billing_contingency, billing_siat_codes
-from services.utils import audit_event, handle_service_errors
 
 SERVICE = 'BILLING'
 

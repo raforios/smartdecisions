@@ -9,6 +9,9 @@ from datetime import timedelta
 from typing import Any
 from boto3.dynamodb.conditions import Attr, Key
 from boto3.resources.base import ServiceResource
+from core.environment import load_and_validate_env_vars
+from core.logger_config import custom_logger as logger
+from core.utils import get_current_time_gmt
 from schemas.activity import (
     ActivityQuerySchema,
     ActivityResponseSchema,
@@ -21,9 +24,6 @@ from services.activity_summary import (
     latest_errors,
     summarize_service
 )
-from services.environment import load_and_validate_env_vars
-from services.logger_config import custom_logger as logger
-from services.utils import get_current_time_gmt
 
 ENV_VARS = load_and_validate_env_vars({
     'DYNAMODB_TABLE_NAME_USAGE': str,

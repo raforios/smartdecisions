@@ -13,6 +13,8 @@ from unittest.mock import patch
 
 import pytest
 
+from core import utils
+from core.exceptions import InvalidInputError, RegisterNotFoundError
 from controllers import billing_siat as controllers
 from models.billing import SETTINGS_TABLE
 from schemas.billing import BillingError, BillingSettings, CufdResponse, CuisResponse
@@ -23,9 +25,8 @@ from schemas.billing_siat import (
     SiatCatalog,
     SiatCodesOut
 )
-from services import billing, billing_siat_codes, utils
+from services import billing, billing_siat_codes
 from services import billing_siat_client as siat_client
-from services.exceptions import InvalidInputError, RegisterNotFoundError
 from tests.test_billing import OTHER_OWNER, OWNER, _dynamodb # pylint: disable=unused-import
 
 LONG_AGO = '2020-01-01T00:00:00-04:00'

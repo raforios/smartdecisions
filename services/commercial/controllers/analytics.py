@@ -6,6 +6,8 @@ from typing import Any
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.utils import load_parameters
+from core.utils import audit_event, get_current_time_gmt, handle_service_errors
 from controllers.common import caller_token
 from schemas.analytics import (
     AnalyticsPdvResponse,
@@ -68,8 +70,6 @@ from services.analytics_utils import (
     list_runs_for_owner,
     persist_run
 )
-from services.utils import load_parameters
-from services.utils import audit_event, get_current_time_gmt, handle_service_errors
 
 
 # Caps on opportunities kept in the run (DynamoDB item limit + usable table)

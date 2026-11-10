@@ -10,6 +10,8 @@ from unittest.mock import patch
 
 import pytest
 
+from core import utils
+from core.exceptions import InvalidInputError, RegisterAlreadyExistsError, RegisterNotFoundError
 from controllers import billing as billing_controllers
 from controllers import billing_cash as controllers
 from schemas.billing import (
@@ -51,8 +53,6 @@ from schemas.billing_cash import (
     TillRef
 )
 from schemas.billing_siat import InvoiceQrOut
-from services import utils
-from services.exceptions import InvalidInputError, RegisterAlreadyExistsError, RegisterNotFoundError
 from tests.test_billing import ( # pylint: disable=unused-import
     CASHIER,
     LATER,

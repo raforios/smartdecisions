@@ -75,6 +75,9 @@ Le gusta que respetes los archivos "md" que se crearon y configuraron para el en
 La lógica vive **siempre** en `services/`. SOLID, DRY, KISS; legibilidad antes
 que optimización prematura.
 
+**El boilerplate vive en `core/`** (Rafael, 8 y 10-nov-2026), fuera de las cinco
+capas: `services/` queda sólo para la lógica de negocio.
+
 **En cada capa el archivo principal se llama como el microservicio.**
 `services/` puede tener varios archivos, pero uno principal con ese nombre.
 **Ningún archivo llega a 800 líneas** (`tools/verification/verify_service.py` falla ahí); si crece, se parte en complementos
@@ -85,7 +88,7 @@ nombrados por funcionalidad.
 1. **No se crean carpetas nuevas dentro de un microservicio** sin pedido
    expreso. Ni `locales/`, ni `config/`, ni `scripts/`, ni ninguna otra. Si algo
    parece no caber en las cinco capas, se para y se pregunta.
-2. **El boilerplate es contrato.** `api_exceptions.py`, `crud.py`,
+2. **El boilerplate es contrato.** `core/api_exceptions.py`, `crud.py`,
    `db_connection.py`, `environment.py`, `exceptions.py`, `logger_config.py`,
    `security.py` y `utils.py` no se modifican sin consulta; si se autoriza una
    adición, va al final del archivo.
@@ -156,7 +159,7 @@ de un servicio llevan su prefijo (`commercial_*`).
 
 ## 5. Configuración
 
-1. **Siempre `load_and_validate_env_vars` de `services/environment.py`**, en el
+1. **Siempre `load_and_validate_env_vars` de `core/environment.py`**, en el
    módulo que usa el valor. Nunca `os.getenv` suelto ni `pydantic-settings`.
 2. **Las variables son requeridas, no opcionales.** `ENV_VARS['X'] or 30` sigue
    siendo un número elegido por el código: si falta configuración, el servicio
@@ -174,7 +177,7 @@ de un servicio llevan su prefijo (`commercial_*`).
      por empresa, en su tabla `<servicio>_parameters`; los que cambian, en
      otra tabla del servicio que asocia el parámetro a la empresa. Se leen
      con `load_parameters` del bloque estándar SERVICE PARAMETERS, al final
-     de `services/utils.py` e idéntico en cada servicio que lo usa. La
+     de `core/utils.py` e idéntico en cada servicio que lo usa. La
      definición única es `docs/parametros.md`; la siembra,
      `tools/seeds/seed_service_parameters.py`.
    - En el código se quedan sólo las constantes físicas y las conversiones de
@@ -263,7 +266,7 @@ archivo grande se entrega como archivo, con una URL firmada de FILES
 (`download_file_bytes`), nunca leyendo el bucket por cuenta propia.
 
 Se agrega **sólo al servicio que lo necesita**, no a todos por simetría.
-**El bloque estándar vive al final de `services/finance/services/utils.py`**
+**El bloque estándar vive al final de `services/finance/core/utils.py`**
 (aprobado por Rafael el 16-oct-2026), con sus códigos en
 `schemas/files.py`: leer, guardar y borrar un archivo a través de FILES,
 reenviando el token del que llama. Se copia tal cual al final del `utils.py`

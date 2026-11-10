@@ -23,6 +23,8 @@ from typing import Final
 
 import pandas as pd
 
+from core.utils import load_parameters
+from core.logger_config import custom_logger as logger
 from schemas.modules import AnalysisUnavailable
 from schemas.closed_options import PaymentTerms
 from schemas.objectives import (
@@ -33,8 +35,6 @@ from schemas.objectives import (
     ObjectivesTotalsSchema,
     Semaphore
 )
-from services.utils import load_parameters
-from services.logger_config import custom_logger as logger
 from services.receivables import TERMS, terms_are
 
 # Business parameters. Defaults, not constants: the policy of an account

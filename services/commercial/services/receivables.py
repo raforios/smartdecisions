@@ -27,6 +27,8 @@ from typing import Any
 
 import pandas as pd
 
+from core.utils import load_parameters
+from core.logger_config import custom_logger as logger
 from schemas.closed_options import PaymentTerms
 from schemas.receivables import (
     AgingBucket,
@@ -51,8 +53,6 @@ from services.analytics_utils import (
     ratio,
     unavailable_block
 )
-from services.utils import load_parameters
-from services.logger_config import custom_logger as logger
 from services.margin import has_cost_data
 from services.receivables_views import (
     build_collection_curve,

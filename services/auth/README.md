@@ -77,7 +77,7 @@ The API **endpoints**, grouped by feature. All of them require `Authorization: B
 | `auth-users` | `email` | `first_name`, `last_name`, `hashed_password`, `client`, `role`, `status`, `date_register` and the sign-ins |
 | `auth-companies` | `name` | `tax_id`, `active`, `created_at`, `updated_at` |
 
-**The first administrator** is created by writing the item straight into `auth-users`, with the hash from `services/security.py`; from then on, an `ADMIN` signs the others up and promotes them with `PATCH /v1/users/{email}`.
+**The first administrator** is created by writing the item straight into `auth-users`, with the hash from `core/security.py`; from then on, an `ADMIN` signs the others up and promotes them with `PATCH /v1/users/{email}`.
 
 -----
 

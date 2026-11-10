@@ -56,6 +56,8 @@ os.environ.setdefault('AWS_PROFILE', PROFILE)
 os.environ.setdefault('AWS_DEFAULT_REGION', REGION)
 
 # pylint: disable=wrong-import-position
+from core.exceptions import InvalidInputError  # noqa: E402
+from core.utils import load_parameters  # noqa: E402
 from schemas.daily_stock import (  # noqa: E402
     DailyStockLoadSchema,
     SaleItemSchema,
@@ -73,7 +75,6 @@ from schemas.localization import (  # noqa: E402
 )
 from schemas.optimization_settings import RouteSettingsSchema  # noqa: E402
 from services.daily_stock import load_daily_stock  # noqa: E402
-from services.exceptions import InvalidInputError  # noqa: E402
 from services.localization import (  # noqa: E402
     create_planned_route,
     list_planned_routes,
@@ -84,7 +85,6 @@ from services.localization_executed import (  # noqa: E402
     create_executed_route,
     register_executed_point
 )
-from services.utils import load_parameters  # noqa: E402
 from services.optimization_settings import save_route_settings  # noqa: E402
 
 BUCKET = 'ml-data-file-handler'

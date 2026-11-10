@@ -22,10 +22,10 @@ from typing import Any
 
 import pandas as pd
 
+from core.logger_config import custom_logger as logger
 from schemas.analytics import AnalyticsError, AnalyticsSummary, Opportunity
 
 from services.calculations import ask_ml_functions
-from services.logger_config import custom_logger as logger
 
 
 PRODUCT_NAMES_KEY = 'product_names'

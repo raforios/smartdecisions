@@ -5,15 +5,15 @@
 from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Depends, Request
 
+from core.db_connection import GET_DB_DEPENDENCY
+from core.logger_config import custom_logger as logger
+from core.security import require_roles
 from controllers.optimization_settings import (
     get_route_settings_controller,
     save_route_settings_controller
 )
 from schemas.localization import FIELD_ROLES, MANAGEMENT_ROLES
 from schemas.optimization_settings import RouteSettingsResponseSchema, RouteSettingsSchema
-from services.db_connection import GET_DB_DEPENDENCY
-from services.logger_config import custom_logger as logger
-from services.security import require_roles
 
 router = APIRouter(prefix = '/v1/commercial', tags = ['Route settings'])
 

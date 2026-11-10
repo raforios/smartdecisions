@@ -11,10 +11,10 @@ from unittest.mock import patch
 import pytest
 from moto import mock_aws
 
+from core.exceptions import InvalidInputError
 from schemas.localization import PlannedPointSchema, PlannedRouteCreateSchema
 from schemas.route_optimization import RouteOptimizationError
 from services import localization, route_optimization as optimizer
-from services.exceptions import InvalidInputError
 from tests.dynamo_helpers import build_resource
 
 OWNER = 'yo@miempresa.com'

@@ -5,7 +5,7 @@
     the DynamoDB items of a dataset, and the thin turn of a stored file into
     the frame this service works with.
 
-    Talking to FILES is NOT here: it lives in `services/utils.py`, which is
+    Talking to FILES is NOT here: it lives in `core/utils.py`, which is
     the model any new DynamoDB microservice copies. What stays is the one
     direct read the rule allows — the static template.
 '''
@@ -18,15 +18,15 @@ import pandas as pd
 from boto3.dynamodb.conditions import Attr
 from boto3.resources.base import ServiceResource
 
+from core.crud import create_item, get_item_by_key
+from core.utils import load_parameters
+from core.environment import load_and_validate_env_vars
+from core.exceptions import ResourceNotFoundError
+from core.logger_config import custom_logger as logger
+from core.utils import download_file_bytes, get_current_time_gmt
 from models.commercial import IngestDataset
 from schemas.commercial import IngestError
-from services.crud import create_item, get_item_by_key
-from services.utils import load_parameters
-from services.environment import load_and_validate_env_vars
-from services.exceptions import ResourceNotFoundError
 from services.load_files import read_dataframe
-from services.logger_config import custom_logger as logger
-from services.utils import download_file_bytes, get_current_time_gmt
 
 
 ENV_VARS = {

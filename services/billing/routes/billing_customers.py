@@ -8,15 +8,15 @@
 from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Body, Depends, Path, Request
 
+from core.db_connection import GET_DB_DEPENDENCY
+from core.logger_config import custom_logger as logger
+from core.security import get_current_owner, get_current_user, require_roles
 from controllers.billing_customers import (
     get_customer_controller,
     list_customers_controller,
     update_customer_controller
 )
 from schemas.billing_customers import CustomerEdit, CustomerOut, CustomerPatch, CustomersResponse
-from services.db_connection import GET_DB_DEPENDENCY
-from services.logger_config import custom_logger as logger
-from services.security import get_current_owner, get_current_user, require_roles
 
 router = APIRouter(prefix = '/v1/billing/customers', tags = ['Billing — Customers'])
 

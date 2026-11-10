@@ -16,6 +16,15 @@ from typing import Any
 
 from boto3.resources.base import ServiceResource
 
+from core.crud import get_item_by_key, put_unique_composite_item, query_by_partition
+from core.utils import load_parameters
+from core.environment import load_and_validate_env_vars
+from core.exceptions import (
+    InvalidInputError,
+    RegisterAlreadyExistsError,
+    RegisterNotFoundError
+)
+from core.logger_config import custom_logger as logger
 from models.localization import PlannedPointItem, PlannedRouteItem
 
 from schemas.localization import (
@@ -30,15 +39,6 @@ from schemas.localization import (
     PlannedRouteUpdateSchema
 )
 from services.common import from_dynamo, new_id, now_iso, to_dynamo
-from services.crud import get_item_by_key, put_unique_composite_item, query_by_partition
-from services.utils import load_parameters
-from services.environment import load_and_validate_env_vars
-from services.exceptions import (
-    InvalidInputError,
-    RegisterAlreadyExistsError,
-    RegisterNotFoundError
-)
-from services.logger_config import custom_logger as logger
 
 _SETTINGS = {
     **load_and_validate_env_vars({

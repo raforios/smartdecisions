@@ -5,6 +5,9 @@
 from fastapi import APIRouter, Depends, Path, Request, status
 from boto3.resources.base import ServiceResource
 
+from core.db_connection import GET_DB_DEPENDENCY
+from core.logger_config import custom_logger as logger
+from core.security import get_current_owner, require_roles
 from controllers.optimization import (
     plans_by_seller_controller,
     route_plan_controller
@@ -16,9 +19,6 @@ from schemas.optimization import (
     PlanQueryParams,
     RoutePlanResponse
 )
-from services.db_connection import GET_DB_DEPENDENCY
-from services.logger_config import custom_logger as logger
-from services.security import get_current_owner, require_roles
 
 router = APIRouter(prefix = '/v1/commercial', tags = ['Optimization'])
 

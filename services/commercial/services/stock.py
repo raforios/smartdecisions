@@ -21,6 +21,8 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from core.utils import load_parameters
+from core.logger_config import custom_logger as logger
 from schemas.stock import (
     StockBlock,
     StockKpis,
@@ -38,8 +40,6 @@ from services.analytics_utils import (
     ratio,
     unavailable_block
 )
-from services.utils import load_parameters
-from services.logger_config import custom_logger as logger
 
 # Business thresholds. Days of coverage are a policy of the operation —a
 # distributor with weekly deliveries reads 10 days very differently from one

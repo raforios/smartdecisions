@@ -20,6 +20,7 @@ from boto3.resources.base import ServiceResource
 from fastapi import Request
 from pydantic import BaseModel
 
+from core.utils import audit_event, delete_stored_file, handle_service_errors
 from controllers.collections import SPEC as COLLECTIONS
 from controllers.objectives import SPEC as OBJECTIVES
 from controllers.common import (
@@ -70,7 +71,6 @@ from services.purchases_load import validate_rows as validate_purchases
 from services.stock_load import parse_frame as parse_stock_frame
 from services.stock_load import prepare_rows as prepare_stock
 from services.stock_load import validate_rows as validate_stock
-from services.utils import audit_event, delete_stored_file, handle_service_errors
 from services.visits import parse_frame as parse_visits_frame
 from services.visits import prepare_rows as prepare_visits
 from services.visits import validate_rows as validate_visits

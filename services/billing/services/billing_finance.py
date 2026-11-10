@@ -29,6 +29,8 @@ from typing import Any
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.environment import load_and_validate_env_vars
+from core.utils import get_current_time_gmt, load_parameters
 from models.billing import (
     LOTS_TABLE,
     PURCHASES_TABLE,
@@ -46,8 +48,6 @@ from services.billing import (
     read_partition
 )
 from services.billing_bridge import lot_shares, merchandise_share, share_if_wanted
-from services.environment import load_and_validate_env_vars
-from services.utils import get_current_time_gmt, load_parameters
 
 FINANCE_QUEUE_URL = load_and_validate_env_vars({'FINANCE_LIVE_QUEUE_URL': str})[
     'FINANCE_LIVE_QUEUE_URL']

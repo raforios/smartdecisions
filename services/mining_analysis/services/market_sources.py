@@ -22,16 +22,16 @@ from datetime import date as date_type, timedelta
 import requests
 from boto3.resources.base import ServiceResource
 
+from core.utils import load_parameters
+from core.environment import load_and_validate_env_vars
+from core.exceptions import ServiceUnavailableError
+from core.logger_config import custom_logger as logger
+from core.utils import get_current_time_gmt
 from models.market_prices import MarketPriceItem
 from schemas.market import MarketError, MarketSource, MarketSyncResult
-from services.utils import load_parameters
-from services.environment import load_and_validate_env_vars
-from services.exceptions import ServiceUnavailableError
-from services.logger_config import custom_logger as logger
 from services.prices_dyb import put_market_prices, query_market_prices
 from services.mining_analysis import OFFICIAL_MINERALS, normalize_name
 from services.prices_store import list_minerals
-from services.utils import get_current_time_gmt
 
 ENV_VARS = {
     **load_and_validate_env_vars({

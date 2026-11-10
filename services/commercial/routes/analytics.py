@@ -5,6 +5,9 @@
 from fastapi import APIRouter, Depends, Header, Path, Query, Request, status
 from boto3.resources.base import ServiceResource
 
+from core.db_connection import GET_DB_DEPENDENCY
+from core.logger_config import custom_logger as logger
+from core.security import get_current_owner
 from controllers.analytics import (
     fx_effect_controller,
     objectives_controller,
@@ -47,14 +50,11 @@ from schemas.analytics import (
     PortfolioResponse,
     SegmentationResponse
 )
-from services.db_connection import GET_DB_DEPENDENCY
 from services.analytics_utils import (
     FORECAST_MONTHS_AHEAD,
     HISTORY_DEFAULT_LIMIT
 )
 from services.forecast import MAX_MONTHS_AHEAD
-from services.logger_config import custom_logger as logger
-from services.security import get_current_owner
 
 router = APIRouter(prefix = '/v1/commercial', tags = ['Analytics'])
 

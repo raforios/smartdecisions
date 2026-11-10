@@ -9,6 +9,11 @@ from datetime import date
 
 import pytest
 
+from core.exceptions import (
+    InvalidInputError,
+    RegisterAlreadyExistsError,
+    ResourceNotFoundError
+)
 from schemas.finance import (
     AccountSchema,
     AccountType,
@@ -17,11 +22,6 @@ from schemas.finance import (
     LawParameterSchema
 )
 from services import finance
-from services.exceptions import (
-    InvalidInputError,
-    RegisterAlreadyExistsError,
-    ResourceNotFoundError
-)
 
 TAXES = AccountSchema(
     account_code = '6.1.07', name = 'Impuestos, tasas y patentes',

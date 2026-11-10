@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from core.logger_config import custom_logger as logger
 from schemas.commercial import PurchasesSummary, ValidationIssue
 from services.commercial import fill_product_ids, normalize_frame
 from services.load_contract import (
@@ -24,7 +25,6 @@ from services.load_contract import (
     validate_by_catalogue
 )
 from services.load_files import read_file
-from services.logger_config import custom_logger as logger
 
 _PRODUCT = 'product_id'
 _DATE = 'purchase_date'

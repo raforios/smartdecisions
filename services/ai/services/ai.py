@@ -24,6 +24,18 @@ from dataclasses import dataclass, replace
 from datetime import timedelta
 from typing import Any
 
+from core.exceptions import (
+    ForbiddenError,
+    InvalidInputError,
+    RegisterNotFoundError,
+    ServiceUnavailableError
+)
+from core.logger_config import custom_logger as logger
+from core.utils import (
+    get_current_time_gmt,
+    handle_service_errors,
+    load_parameters
+)
 from models.ai import ExplanationItem, PromptItem
 from schemas.ai import AIError, PromptCaller
 from services.ai_utils import (
@@ -38,18 +50,6 @@ from services.ai_utils import (
     put_prompt
 )
 from services.bedrock_client import invoke
-from services.exceptions import (
-    ForbiddenError,
-    InvalidInputError,
-    RegisterNotFoundError,
-    ServiceUnavailableError
-)
-from services.logger_config import custom_logger as logger
-from services.utils import (
-    get_current_time_gmt,
-    handle_service_errors,
-    load_parameters
-)
 
 
 # The business values of an explanation live in the service's own table

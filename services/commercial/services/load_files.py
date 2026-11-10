@@ -15,7 +15,7 @@ from typing import Final
 
 import pandas as pd
 
-from services.logger_config import custom_logger as logger
+from core.logger_config import custom_logger as logger
 
 SUPPORTED_EXTENSIONS: Final[tuple[str, ...]] = ('.xlsx', '.csv')
 

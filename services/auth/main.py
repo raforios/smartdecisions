@@ -17,15 +17,15 @@ from mangum import Mangum
 
 import uvicorn
 
+from core.api_exceptions import setup_exception_handlers
+from core.logger_config import custom_logger as logger
+from core.environment import load_and_validate_env_vars
 from routes.auth import router as auth_router
 from routes.companies import router as companies_router
 from routes.users import router as users_router
 
 from controllers.users import get_current_admin_user
 from schemas.health import TableHealth, TablesHealthResponse, TableState
-from services.api_exceptions import setup_exception_handlers
-from services.logger_config import custom_logger as logger
-from services.environment import load_and_validate_env_vars
 
 ENV_VARS = load_and_validate_env_vars(
     env_vars = {

@@ -15,6 +15,8 @@ from typing import Any
 
 import pandas as pd
 
+from core.utils import load_parameters
+from core.logger_config import custom_logger as logger
 from schemas.modules import AnalysisUnavailable
 from schemas.analytics import (
     ClientAtRisk,
@@ -35,8 +37,6 @@ from services.analytics_utils import (
     ratio
 )
 from services.currency import money_row, money_sums
-from services.utils import load_parameters
-from services.logger_config import custom_logger as logger
 
 # What counts as "at risk" is a business rule, not a constant of nature: a
 # distributor whose clients restock weekly and one whose clients restock

@@ -8,6 +8,7 @@
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.utils import audit_event, handle_service_errors
 from schemas.finance import (
     AccountListResponseSchema,
     AccountResponseSchema,
@@ -25,7 +26,6 @@ from services.finance import (
     rename_account,
     set_law_parameter
 )
-from services.utils import audit_event, handle_service_errors
 
 
 @handle_service_errors('FINANCE')

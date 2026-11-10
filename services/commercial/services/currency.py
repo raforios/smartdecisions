@@ -21,13 +21,13 @@ import pandas as pd
 import requests
 from pydantic import BaseModel
 
+from core.utils import load_parameters
+from core.environment import load_and_validate_env_vars
+from core.exceptions import ServiceUnavailableError
+from core.logger_config import custom_logger as logger
+from core.utils import API_URL
 from schemas.analytics import AnalyticsError, Money, ReferenceRates
 from services.analytics_utils import AMOUNT_DECIMALS
-from services.utils import load_parameters
-from services.environment import load_and_validate_env_vars
-from services.exceptions import ServiceUnavailableError
-from services.logger_config import custom_logger as logger
-from services.utils import API_URL
 
 ENV_VARS = {
     **load_and_validate_env_vars({

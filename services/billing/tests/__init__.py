@@ -3,7 +3,7 @@
 
     Two things must be in place *before* any test module imports the service:
 
-        1. The DB_* environment variables, because services.db_connection
+        1. The DB_* environment variables, because core.db_connection
            validates its configuration at import time (the engine itself is
            created lazily and never actually connects during the tests).
         2. The scripts/ directory on sys.path, because the catalog importer is

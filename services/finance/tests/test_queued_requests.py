@@ -10,9 +10,9 @@ from fastapi.testclient import TestClient
 from jose import jwt
 
 import main
+from core import security, utils
 from routes import entries as entries_routes
 from schemas.entries import LoadChannel, LoadFlow, LoadResultSchema
-from services import security, utils
 
 LOADS_PATH = '/v1/finance/loads'
 

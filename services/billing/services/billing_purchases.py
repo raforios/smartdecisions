@@ -13,6 +13,8 @@ from typing import Any
 
 from boto3.resources.base import ServiceResource
 
+from core.exceptions import RegisterNotFoundError
+from core.logger_config import custom_logger as logger
 from models.billing import (
     LotItem,
     OWNER_KEY,
@@ -28,8 +30,6 @@ from schemas.billing import (
     PurchaseNoteOut,
     PurchaseNotesResponse
 )
-from services.exceptions import RegisterNotFoundError
-from services.logger_config import custom_logger as logger
 from services.billing import (
     MONEY_DECIMALS,
     SortBounds,

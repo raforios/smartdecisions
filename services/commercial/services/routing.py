@@ -10,10 +10,10 @@ from typing import Any
 
 import requests
 
+from core.exceptions import ServiceUnavailableError
+from core.environment import load_and_validate_env_vars
+from core.logger_config import custom_logger as logger
 from schemas.optimization import OptimizationError
-from services.exceptions import ServiceUnavailableError
-from services.environment import load_and_validate_env_vars
-from services.logger_config import custom_logger as logger
 
 
 # OSRM demo server by default; override with a self-hosted instance in prod.

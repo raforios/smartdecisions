@@ -1,10 +1,10 @@
 '''
     Tests for the business values read from the service's parameters table
-    (the SERVICE PARAMETERS block of `services/utils.py`).
+    (the SERVICE PARAMETERS block of `core/utils.py`).
 '''
 import pytest
 
-from services import utils
+from core import utils
 
 
 def test_the_table_is_read_page_by_page(monkeypatch: pytest.MonkeyPatch):

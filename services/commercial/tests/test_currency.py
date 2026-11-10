@@ -10,10 +10,10 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
+from core.exceptions import ServiceUnavailableError
 from schemas.analytics import Money
 from schemas.receivables import ReceivablesResponse
 from services import currency
-from services.exceptions import ServiceUnavailableError
 
 # The float began in June and the rate moved: 6.96 in July, 7.40 in September.
 # The exact shape QUOTES answers (`ExchangeRatePoint`). The fixture used to

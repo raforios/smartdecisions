@@ -2,7 +2,7 @@
     services/auth/tests/test_auth.py
 
     GitHub Actions runs this suite with no `.env`, and every module under
-    `routes/`, `controllers/` and `services/utils.py` validates the environment
+    `routes/`, `controllers/` and `core/utils.py` validates the environment
     on import. So only pure schemas are exercised here; the token itself (email,
     role, client) is verified against the deployed service.
 '''
@@ -11,9 +11,9 @@ from datetime import datetime, timezone
 import pytest
 from pydantic import ValidationError
 
+from core.security import hash_password, verify_password
 from schemas.role import Role
 from schemas.users import InternalUser, PasswordChangeRequest, UserResponse
-from services.security import hash_password, verify_password
 from services.sessions import company_members, login_update
 
 
@@ -57,7 +57,7 @@ def test_a_duplicate_caught_by_dynamodb_answers_already_registered(monkeypatch):
     monkeypatch.setenv('TABLE_NAME', 'auth-users-test')
     monkeypatch.setenv('AWS_DEFAULT_REGION', 'us-east-1')
     dynamodb = importlib.import_module('services.dynamodb')
-    exceptions = importlib.import_module('services.exceptions')
+    exceptions = importlib.import_module('core.exceptions')
 
     class _Table: # pylint: disable=too-few-public-methods
         '''A table whose conditional write always finds the e-mail taken.'''
@@ -91,7 +91,7 @@ def test_a_failure_of_the_table_answers_a_code_not_its_message(monkeypatch):
     monkeypatch.setenv('TABLE_NAME', 'auth-users-test')
     monkeypatch.setenv('AWS_DEFAULT_REGION', 'us-east-1')
     dynamodb = importlib.import_module('services.dynamodb')
-    exceptions = importlib.import_module('services.exceptions')
+    exceptions = importlib.import_module('core.exceptions')
 
     class _Table: # pylint: disable=too-few-public-methods
         '''A table that is throttling.'''

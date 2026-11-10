@@ -17,14 +17,14 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from mangum import Mangum
 import uvicorn
 
+from core.api_exceptions import setup_exception_handlers
+from core.security import require_roles
+from core.logger_config import custom_logger as logger
+from core.environment import load_and_validate_env_vars
 from routes.activity import router as activity_router
 from routes.events import router as events_router
 
 from schemas.health import TableHealth, TablesHealthResponse, TableState
-from services.api_exceptions import setup_exception_handlers
-from services.security import require_roles
-from services.logger_config import custom_logger as logger
-from services.environment import load_and_validate_env_vars
 
 ENV_VARS = load_and_validate_env_vars(
     env_vars = {

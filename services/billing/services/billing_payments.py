@@ -17,6 +17,8 @@
 import re
 from typing import Any, Final
 
+from core.exceptions import InvalidInputError
+from core.logger_config import custom_logger as logger
 from schemas.billing import (
     CARD_METHODS,
     SIN_PAYMENT_CODES,
@@ -28,8 +30,6 @@ from schemas.billing import (
 from schemas.billing_reports import MethodTotal
 from schemas.billing_siat import CatalogEntry
 from services.billing import MONEY_DECIMALS, stored_payments
-from services.exceptions import InvalidInputError
-from services.logger_config import custom_logger as logger
 
 
 # The separators the catalogue uses between the parts of a combination.

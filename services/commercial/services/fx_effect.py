@@ -22,6 +22,8 @@
 
 import pandas as pd
 
+from core.utils import load_parameters
+from core.logger_config import custom_logger as logger
 from schemas.modules import AnalysisUnavailable
 from schemas.fx_effect import (
     CategoryFx,
@@ -44,8 +46,6 @@ from services.analytics_utils import (
     money,
     ratio
 )
-from services.utils import load_parameters
-from services.logger_config import custom_logger as logger
 from services.margin import has_cost_data
 
 _SETTINGS = load_parameters({

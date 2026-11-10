@@ -38,6 +38,15 @@ from typing import Any
 import requests
 from boto3.resources.base import ServiceResource
 
+from core.utils import load_parameters
+from core.logger_config import custom_logger as logger
+from core.exceptions import ServiceUnavailableError
+from core.utils import (
+    API_URL,
+    REQUEST_TIMEOUT_SECONDS,
+    get_current_time_gmt,
+    handle_service_errors
+)
 from schemas.market import MarketError
 from schemas.mining_analysis import (
     ForecastConfidence,
@@ -45,8 +54,6 @@ from schemas.mining_analysis import (
     MiningResult,
     MiningStatus
 )
-from services.utils import load_parameters
-from services.logger_config import custom_logger as logger
 from services.mining_analysis import OFFICIAL_MINERALS
 from services.official_reports import (
     biweekly_period_bounds,
@@ -57,13 +64,6 @@ from services.official_reports import (
     resolve_mineral_id_map
 )
 from services.prices_store import PriceRecord, prices_in_window
-from services.exceptions import ServiceUnavailableError
-from services.utils import (
-    API_URL,
-    REQUEST_TIMEOUT_SECONDS,
-    get_current_time_gmt,
-    handle_service_errors
-)
 
 
 # Required, not optional: a fallback in code is still a number the code chose.

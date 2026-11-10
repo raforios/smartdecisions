@@ -15,6 +15,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from core import utils
+from core.exceptions import InvalidInputError
 from controllers import billing as controllers
 from models.billing import OWNER_KEY, SETTINGS_TABLE, SETTING_SORT_KEY
 from schemas.billing import (
@@ -41,11 +43,10 @@ from schemas.billing_siat import (
     SiatCatalog,
     SiatCodesOut
 )
-from services import billing, billing_customers, billing_invoicing, billing_sales, utils
+from services import billing, billing_customers, billing_invoicing, billing_sales
 from services import billing_siat_client as siat_client
 from services.billing_invoice_xml import validate_against_schema
 from services.billing_siat import build_cuf, check_digit, cuf_chain
-from services.exceptions import InvalidInputError
 from tests.test_billing import ( # pylint: disable=unused-import
     CASHIER,
     LATER,

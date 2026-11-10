@@ -4,10 +4,10 @@
     Under /v1/auth, which the gateway already sends to AUTH.
 '''
 from fastapi import APIRouter, Depends, status
+from core.logger_config import custom_logger as logger
 from controllers.companies import add_company, change_company, read_companies, remove_company
 from controllers.users import get_current_admin_user
 from schemas.companies import CompanyRequest, CompanyResponse, CompanyUpdateRequest
-from services.logger_config import custom_logger as logger
 
 router = APIRouter(prefix = '/v1/auth/companies', tags = ['Companies'],
                    dependencies = [Depends(get_current_admin_user)])

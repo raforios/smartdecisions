@@ -9,12 +9,12 @@
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.utils import audit_event, handle_service_errors
 from schemas.billing import SaleNoteOut
 from schemas.billing_returns import CreditNoteOut, CreditNoteRef
 from services import billing_reversals
 from services.billing_bridge import share_cancellation, share_return
 from services.billing_movements import share_movement
-from services.utils import audit_event, handle_service_errors
 
 SERVICE = 'BILLING'
 

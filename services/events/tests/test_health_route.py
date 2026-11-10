@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from jose import jwt
 
 import main
-from services import security
+from core import security
 
 
 def _bearer(**claims) -> str:

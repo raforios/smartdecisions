@@ -8,6 +8,7 @@
 '''
 import pytest
 
+from core.exceptions import InvalidInputError
 from schemas.billing import (
     BillingError,
     Payment,
@@ -17,7 +18,6 @@ from schemas.billing import (
     SaleNoteIn
 )
 from services import billing_payments, billing_sales
-from services.exceptions import InvalidInputError
 from tests.test_billing import CASHIER, LATER, OWNER, _dynamodb, _receive, _register # pylint: disable=unused-import
 from tests.test_billing_sale_invoice import ( # pylint: disable=unused-import
     BUYER,

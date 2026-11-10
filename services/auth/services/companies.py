@@ -10,6 +10,14 @@ from typing import Any
 import boto3
 from botocore.exceptions import ClientError
 
+from core.environment import load_and_validate_env_vars
+from core.exceptions import (
+    InvalidInputError,
+    RegisterAlreadyExistsError,
+    RegisterNotFoundError
+)
+from core.logger_config import custom_logger as logger
+from core.utils import get_current_time_gmt
 from schemas.companies import (
     CompanyError,
     CompanyRequest,
@@ -17,14 +25,6 @@ from schemas.companies import (
     CompanyUpdateRequest
 )
 from services.dynamodb import scan_all_users
-from services.environment import load_and_validate_env_vars
-from services.exceptions import (
-    InvalidInputError,
-    RegisterAlreadyExistsError,
-    RegisterNotFoundError
-)
-from services.logger_config import custom_logger as logger
-from services.utils import get_current_time_gmt
 
 ENV_VARS = load_and_validate_env_vars({'TABLE_NAME_COMPANIES': str})
 COMPANIES_TABLE = ENV_VARS['TABLE_NAME_COMPANIES']

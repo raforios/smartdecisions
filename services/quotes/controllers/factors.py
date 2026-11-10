@@ -10,6 +10,7 @@ from datetime import date as date_type
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.utils import audit_event, handle_service_errors
 from schemas.factors import (
     FactorDefinitionSchema,
     FactorListResponseSchema,
@@ -29,7 +30,6 @@ from services.factors import (
     to_factor_response,
     transport_cost
 )
-from services.utils import audit_event, handle_service_errors
 
 
 @handle_service_errors('QUOTES')

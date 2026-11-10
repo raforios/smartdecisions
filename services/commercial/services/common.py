@@ -8,10 +8,10 @@ from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
+from core.exceptions import InvalidInputError
+from core.logger_config import custom_logger as logger
+from core.utils import get_current_time_gmt
 from schemas.optimization import OptimizationError
-from services.exceptions import InvalidInputError
-from services.logger_config import custom_logger as logger
-from services.utils import get_current_time_gmt
 
 # Mean Earth radius — a physical constant, not a business choice.
 EARTH_RADIUS_M = 6_371_000.0

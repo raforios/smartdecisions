@@ -1,10 +1,10 @@
 '''
     Classification controller
 '''
+from core.logger_config import custom_logger as logger
+from core.utils import handle_operation
 from services import training
 from services.classification import association_rules, rank_tiers
-from services.logger_config import custom_logger as logger
-from services.utils import handle_operation
 from schemas.classification import (
     AssociationRule,
     AssociationRulesRequest,

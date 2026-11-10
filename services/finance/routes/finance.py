@@ -8,6 +8,9 @@
 from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Depends, Path as PathParam, Request, status
 
+from core.db_connection import GET_DB_DEPENDENCY
+from core.logger_config import custom_logger as logger
+from core.security import get_current_owner, require_roles
 from controllers.finance import (
     create_account_controller,
     delete_account_controller,
@@ -25,9 +28,6 @@ from schemas.finance import (
     LawParameterResponseSchema,
     LawParameterSchema
 )
-from services.db_connection import GET_DB_DEPENDENCY
-from services.logger_config import custom_logger as logger
-from services.security import get_current_owner, require_roles
 
 router = APIRouter(prefix = '/v1/finance', tags = ['Financial analysis'])
 

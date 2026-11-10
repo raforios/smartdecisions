@@ -16,9 +16,9 @@ from datetime import date as date_type
 
 import requests
 
+from core.logger_config import custom_logger as logger
+from core.utils import API_URL, REQUEST_TIMEOUT_SECONDS
 from schemas.report import ExchangeSchema, ReportError
-from services.logger_config import custom_logger as logger
-from services.utils import API_URL, REQUEST_TIMEOUT_SECONDS
 
 # The currencies QUOTES serves, by the code it answers to.
 OFFICIAL_DOLLAR = 'USD'

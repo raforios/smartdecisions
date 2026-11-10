@@ -5,11 +5,11 @@
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.utils import audit_event, handle_service_errors
 from controllers.common import CompanionSpec, load_sales_frame, store_companion
 from schemas.commercial import CollectionsResponse
 from services.commercial_utils import get_owned_dataset
 from services.collections import parse_and_validate
-from services.utils import audit_event, handle_service_errors
 
 # The controller signature is fixed by the route —resource, dataset, file,
 # name, caller, request— and the three companion controllers are the same

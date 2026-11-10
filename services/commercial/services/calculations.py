@@ -11,9 +11,9 @@ from typing import Any
 
 import requests
 
-from services.exceptions import ServiceUnavailableError
-from services.logger_config import custom_logger as logger
-from services.utils import API_URL, REQUEST_TIMEOUT_SECONDS
+from core.exceptions import ServiceUnavailableError
+from core.logger_config import custom_logger as logger
+from core.utils import API_URL, REQUEST_TIMEOUT_SECONDS
 
 
 def ask_ml_functions(

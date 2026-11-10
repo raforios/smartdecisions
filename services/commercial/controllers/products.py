@@ -6,6 +6,7 @@
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.utils import audit_event, handle_service_errors
 from schemas.products import (
     ProductBulkUpsertSchema,
     ProductListResponseSchema,
@@ -21,7 +22,6 @@ from services.products import (
     update_product,
     upsert_products
 )
-from services.utils import audit_event, handle_service_errors
 
 
 @handle_service_errors('COMMERCIAL')

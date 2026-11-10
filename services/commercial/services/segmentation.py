@@ -14,12 +14,12 @@
 
 import pandas as pd
 
+from core.utils import load_parameters
+from core.logger_config import custom_logger as logger
 from schemas.analytics import AnalyticsError, SegmentationBlock, SegmentClient, SegmentTier
 
 from services.calculations import rank_tiers
 from services.currency import money_row, money_sums
-from services.utils import load_parameters
-from services.logger_config import custom_logger as logger
 
 _AMOUNT = 'total_amount'
 _CLIENT_ID = 'pos_id'

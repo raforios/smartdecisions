@@ -179,7 +179,7 @@ Error codes: `SIAT_REFUSED`, `BUYER_WITHOUT_EMAIL`, `MAIL_NOT_SENT`, `SIAT_ISSUE
 
 The service's business values live in the `billing_parameters` table (one item per code),
 not in `.env`. They are read by `load_parameters`, from the SERVICE PARAMETERS
-block at the end of `services/utils.py`, once per container; a value changed in
+block at the end of `core/utils.py`, once per container; a value changed in
 the table is picked up by the containers that start afterwards. If one is
 missing, the service does not start. What each shop sets (for example the till-closing alert time) lives in `billing_settings`. Definition: the `billing` rows of
 `docs/parametros.md`. Seed:

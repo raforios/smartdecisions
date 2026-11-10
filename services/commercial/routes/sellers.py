@@ -8,6 +8,9 @@
 from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Depends, Path as PathParam, Query, Request, status
 
+from core.db_connection import GET_DB_DEPENDENCY
+from core.logger_config import custom_logger as logger
+from core.security import get_current_owner, require_roles
 from controllers.sellers import list_sellers_controller, update_seller_controller
 from schemas.sellers import (
     LINKING_ROLES,
@@ -15,9 +18,6 @@ from schemas.sellers import (
     SellerResponseSchema,
     SellerUpdateSchema
 )
-from services.db_connection import GET_DB_DEPENDENCY
-from services.logger_config import custom_logger as logger
-from services.security import get_current_owner, require_roles
 
 router = APIRouter(prefix = '/v1/commercial/sellers', tags = ['Seller master'])
 

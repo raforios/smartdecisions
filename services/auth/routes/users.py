@@ -2,6 +2,8 @@
     Users: routes handler
 '''
 from fastapi import APIRouter, Depends, status
+from core.logger_config import custom_logger as logger
+from core.exceptions import RegisterNotFoundError
 from controllers.users import (
     read_users,
     get_current_admin_user,
@@ -15,8 +17,6 @@ from controllers.users import (
 )
 from schemas.auth import AuthError, AuthResult, SignupResponse
 from schemas.users import UserUpdateRequest, UserResponse, PasswordChangeRequest
-from services.logger_config import custom_logger as logger
-from services.exceptions import RegisterNotFoundError
 
 router = APIRouter(prefix = '/v1/users', tags = ['Users'])
 

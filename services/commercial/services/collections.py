@@ -24,6 +24,7 @@ from typing import Final
 
 import pandas as pd
 
+from core.logger_config import custom_logger as logger
 from schemas.commercial import (
     CollectionsSummary,
     ValidationIssue,
@@ -38,7 +39,6 @@ from services.load_contract import (
     validate
 )
 from services.load_files import read_file
-from services.logger_config import custom_logger as logger
 
 _ORDER = 'order_id'
 _PAID = 'paid_amount'

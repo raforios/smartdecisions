@@ -8,6 +8,9 @@ from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Body, Depends, Path, Query, Request, status
 from pydantic import BaseModel
 
+from core.db_connection import GET_DB_DEPENDENCY
+from core.logger_config import custom_logger as logger
+from core.security import require_roles
 from controllers.localization import (
     add_planned_point_controller,
     bulk_upload_planned_routes_controller,
@@ -65,9 +68,6 @@ from schemas.localization import (
 )
 from schemas.route_optimization import RouteOptimizationSchema
 from routes.common import csv_upload_text, get_caller
-from services.db_connection import GET_DB_DEPENDENCY
-from services.logger_config import custom_logger as logger
-from services.security import require_roles
 
 router = APIRouter(prefix = '/v1/commercial', tags = ['Route tracking'])
 

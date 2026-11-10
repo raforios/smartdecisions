@@ -6,6 +6,7 @@ from typing import Any
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.utils import get_current_time_gmt, handle_service_errors
 from schemas.analytics import ReferenceRates
 from schemas.dashboard import PurchaseFigures
 from schemas.purchases import PurchasesResponse, PurchasesUnavailable
@@ -18,7 +19,6 @@ from services.purchases import (
     latest_prices,
     with_costs_in_bolivianos
 )
-from services.utils import get_current_time_gmt, handle_service_errors
 
 
 def todays_rates(auth_token: str) -> ReferenceRates:

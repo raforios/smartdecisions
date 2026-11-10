@@ -6,9 +6,9 @@
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from core.utils import get_current_time_gmt
 from schemas.billing import PurchaseLineIn, PurchaseNoteIn, SaleLineIn
 from services import billing_bridge, billing_finance, billing_purchases, billing_sales
-from services.utils import get_current_time_gmt
 from tests.test_billing import ( # pylint: disable=unused-import
     CASHIER,
     LATER,

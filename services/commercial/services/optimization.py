@@ -32,11 +32,11 @@
 import numpy as np
 import pandas as pd
 
+from core.utils import load_parameters
+from core.exceptions import InvalidInputError
+from core.logger_config import custom_logger as logger
 from schemas.optimization import DayRoute, RouteStop, OptimizationError
 from services.calculations import ask_ml_functions, rank_tiers
-from services.utils import load_parameters
-from services.exceptions import InvalidInputError
-from services.logger_config import custom_logger as logger
 from services.routing import road_trip
 
 

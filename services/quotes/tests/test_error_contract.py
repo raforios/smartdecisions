@@ -11,12 +11,12 @@ import asyncio
 import pytest
 from fastapi import HTTPException
 
-from services.exceptions import (
+from core.exceptions import (
     InvalidInputError,
     RegisterAlreadyExistsError,
     RegisterNotFoundError
 )
-from services.utils import handle_service_errors
+from core.utils import handle_service_errors
 
 
 @pytest.mark.parametrize('error, status', [

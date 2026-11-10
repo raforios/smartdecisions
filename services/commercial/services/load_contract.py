@@ -20,6 +20,8 @@ import pandas as pd
 import pandera.pandas as pa
 from pandera.errors import SchemaErrors
 
+from core.utils import load_parameters
+from core.logger_config import custom_logger as logger
 from schemas.commercial import (
     CLIENT_COLUMNS,
     COLLECTION_COLUMNS,
@@ -36,8 +38,6 @@ from schemas.commercial import (
     ValidationIssue,
     ValidationRule
 )
-from services.utils import load_parameters
-from services.logger_config import custom_logger as logger
 
 _ENV_VARS = load_parameters({
     'AMOUNT_DECIMALS': int

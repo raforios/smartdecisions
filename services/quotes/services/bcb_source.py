@@ -23,10 +23,10 @@ from datetime import date as date_type
 
 import requests
 
+from core.environment import load_and_validate_env_vars
+from core.exceptions import ServiceUnavailableError
+from core.logger_config import custom_logger as logger
 from schemas.quotes import QuotesError
-from services.environment import load_and_validate_env_vars
-from services.exceptions import ServiceUnavailableError
-from services.logger_config import custom_logger as logger
 
 
 # Required: reaching an external source has a budget, and it is not the

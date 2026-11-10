@@ -4,15 +4,15 @@
 '''
 from boto3.resources.base import ServiceResource
 
+from core.exceptions import RegisterNotFoundError
+from core.logger_config import custom_logger as logger
 from models.localization import ExecutedRouteItem
 from schemas.daily_stock import DayStatisticsSchema, SellerDaySchema
 from schemas.localization import ExecutedRouteFilterSchema
 from services.daily_stock import get_daily_stock
-from services.exceptions import RegisterNotFoundError
 from services.localization import get_planned_route
 from services.localization_executed import list_executed_routes, route_km
 from services.localization_stats import score_execution
-from services.logger_config import custom_logger as logger
 
 def _sold(
     route: ExecutedRouteItem,

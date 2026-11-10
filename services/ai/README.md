@@ -74,7 +74,7 @@ Failures travel as codes: `EMPTY_PAYLOAD`, `ROLE_NOT_CONFIGURED`, `ROLE_NOT_FOUN
 
 The service's business values live in the `ai_parameters` table (one item per code),
 not in `.env`. They are read by `load_parameters`, from the SERVICE PARAMETERS
-block at the end of `services/utils.py`, once per container; a value changed in
+block at the end of `core/utils.py`, once per container; a value changed in
 the table is picked up by the containers that start afterwards. If one is
 missing, the service does not start. Definition: the `ai` rows of
 `docs/parametros.md`. Seed:

@@ -12,10 +12,10 @@ from typing import Any
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
+from core.environment import load_and_validate_env_vars
+from core.exceptions import RegisterAlreadyExistsError, ServiceUnavailableError
+from core.logger_config import custom_logger as logger
 from schemas.auth import AuthError
-from services.environment import load_and_validate_env_vars
-from services.exceptions import RegisterAlreadyExistsError, ServiceUnavailableError
-from services.logger_config import custom_logger as logger
 
 dynamodb = boto3.resource('dynamodb')
 

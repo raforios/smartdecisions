@@ -4,6 +4,9 @@
 from fastapi import APIRouter, Depends, status
 from boto3.resources.base import ServiceResource
 
+from core.db_connection import GET_DB_DEPENDENCY
+from core.logger_config import custom_logger as logger
+from core.security import get_current_user, require_roles
 from controllers.events import (
     create_audit_record_controller,
     create_usage_log_controller,
@@ -23,9 +26,6 @@ from schemas.usage_log import (
     UsageLogResponseSchema,
     UsageLogsPage
 )
-from services.db_connection import GET_DB_DEPENDENCY
-from services.logger_config import custom_logger as logger
-from services.security import get_current_user, require_roles
 
 router = APIRouter(prefix = '/v1/events', tags = ['Events'])
 

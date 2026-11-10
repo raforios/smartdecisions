@@ -3,11 +3,11 @@
 '''
 from boto3.resources.base import ServiceResource
 
+from core.environment import load_and_validate_env_vars
+from core.logger_config import custom_logger as logger
 from models.optimization_settings import RouteSettingsItem
 from schemas.optimization_settings import RouteSettingsResponseSchema, RouteSettingsSchema
 from services.common import from_dynamo, now_iso, to_dynamo
-from services.environment import load_and_validate_env_vars
-from services.logger_config import custom_logger as logger
 
 _SETTINGS = load_and_validate_env_vars({'DYNAMODB_TABLE_NAME_OPTIMIZATION_SETTINGS': str})
 SETTINGS_TABLE = _SETTINGS['DYNAMODB_TABLE_NAME_OPTIMIZATION_SETTINGS']

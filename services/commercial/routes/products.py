@@ -6,6 +6,9 @@
 from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Depends, Path as PathParam, Request, status
 
+from core.db_connection import GET_DB_DEPENDENCY
+from core.logger_config import custom_logger as logger
+from core.security import get_current_owner
 from controllers.products import (
     get_product_controller,
     list_products_controller,
@@ -19,9 +22,6 @@ from schemas.products import (
     ProductUpdateSchema,
     ProductUpsertResultSchema
 )
-from services.db_connection import GET_DB_DEPENDENCY
-from services.logger_config import custom_logger as logger
-from services.security import get_current_owner
 
 router = APIRouter(prefix = '/v1/commercial/products', tags = ['Product master'])
 

@@ -22,6 +22,9 @@ from typing import Any
 
 from boto3.resources.base import ServiceResource
 
+from core.crud import find_item_by_key, put_items, query_by_partition
+from core.environment import load_and_validate_env_vars
+from core.logger_config import custom_logger as logger
 from models.market_prices import (
     MARKET_PARTITION_KEY,
     MARKET_SORT_KEY,
@@ -36,9 +39,6 @@ from models.mining_analysis import (
     MineralItem,
     MiningPriceItem
 )
-from services.crud import find_item_by_key, put_items, query_by_partition
-from services.environment import load_and_validate_env_vars
-from services.logger_config import custom_logger as logger
 
 ENV_VARS = load_and_validate_env_vars({
     'DYNAMODB_TABLE_NAME_MINERALS': str,

@@ -14,18 +14,18 @@ from typing import Any
 
 from boto3.resources.base import ServiceResource
 
+from core.utils import load_parameters
+from core.exceptions import InvalidInputError
+from core.logger_config import custom_logger as logger
+from core.utils import handle_service_errors
 from schemas.market import MarketError
 from schemas.mining_analysis import MiningResult, MiningStatus
-from services.utils import load_parameters
-from services.exceptions import InvalidInputError
-from services.logger_config import custom_logger as logger
 from services.mining_analysis import CHANGE_DECIMALS, OFFICIAL_MINERALS, normalize_name
 from services.prices_store import (
     average_low,
     latest_prices_before,
     list_minerals
 )
-from services.utils import handle_service_errors
 
 # Required, not optional: a fallback written in code is still a number the
 # code chose.

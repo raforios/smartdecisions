@@ -21,12 +21,12 @@ from typing import Any
 
 import requests
 
+from core.utils import load_parameters
+from core.exceptions import ServiceUnavailableError
+from core.logger_config import custom_logger as logger
+from core.utils import API_URL, REQUEST_TIMEOUT_SECONDS
 from models.quotes import ExchangeRateItem
 from schemas.quotes import QuotesError, RateConfidence
-from services.utils import load_parameters
-from services.exceptions import ServiceUnavailableError
-from services.logger_config import custom_logger as logger
-from services.utils import API_URL, REQUEST_TIMEOUT_SECONDS
 
 
 # Required, not optional: a fallback in code is still a number living in

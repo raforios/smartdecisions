@@ -3,6 +3,7 @@
 '''
 from fastapi import Request
 
+from core.utils import audit_event, handle_service_errors
 from schemas.ai import (
     ExplainRequest,
     ExplainResponse,
@@ -20,7 +21,6 @@ from services.ai import (
     save_role_service,
     set_role_active_service
 )
-from services.utils import audit_event, handle_service_errors
 
 
 @handle_service_errors('AI')

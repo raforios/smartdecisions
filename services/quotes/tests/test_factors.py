@@ -10,6 +10,7 @@ from datetime import date
 
 import pytest
 
+from core.exceptions import ResourceNotFoundError
 from schemas.factors import (
     FactorDefinitionSchema,
     FactorError,
@@ -17,7 +18,6 @@ from schemas.factors import (
     FactorValueSchema
 )
 from services import factors
-from services.exceptions import ResourceNotFoundError
 
 OWNER = 'yo@miempresa.com'
 OTHER = 'otra@empresa.com'

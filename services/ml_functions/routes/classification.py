@@ -3,8 +3,8 @@
 '''
 
 from fastapi import APIRouter, Depends
-from services.security import get_current_user
-from services.logger_config import custom_logger as logger
+from core.security import get_current_user
+from core.logger_config import custom_logger as logger
 from controllers.classification import (
     calculating_sigmoid,
     calculating_cost_logistic,

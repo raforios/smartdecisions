@@ -5,6 +5,7 @@ from datetime import date as date_type
 
 from fastapi import Request
 
+from core.utils import audit_event, handle_service_errors
 from models.quotes import USD
 from schemas.quotes import (
     RateOnDate,
@@ -20,7 +21,6 @@ from services.quotes import (
     get_history_service,
     sync_rates_service
 )
-from services.utils import audit_event, handle_service_errors
 
 
 

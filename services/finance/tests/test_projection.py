@@ -11,9 +11,9 @@ from unittest.mock import Mock
 
 import pytest
 
+from core.exceptions import InvalidInputError, ServiceUnavailableError
 from schemas.projection import ProjectionError, ScenarioInputSchema, ScenarioName
 from services import projection as P
-from services.exceptions import InvalidInputError, ServiceUnavailableError
 from services.report import Context, build_report
 from tests.test_report import CATALOG, FINANCE_VALUES, RATES, SETTINGS, _month
 

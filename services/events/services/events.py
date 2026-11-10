@@ -11,13 +11,13 @@ from dataclasses import dataclass
 from boto3.resources.base import ServiceResource
 from pydantic import BaseModel
 
+from core.crud import create_item, get_all_records_paginated
+from core.environment import load_and_validate_env_vars
+from core.logger_config import custom_logger as logger
+from core.utils import get_current_time_gmt
 from schemas.audit import AuditRecordResponseSchema, AuditRecordsPage
 from schemas.usage_log import UsageLogResponseSchema, UsageLogsPage
-from services.crud import create_item, get_all_records_paginated
-from services.environment import load_and_validate_env_vars
-from services.logger_config import custom_logger as logger
 from services.payload_limits import cap_log_bodies, cap_many
-from services.utils import get_current_time_gmt
 
 ENV_VARS = load_and_validate_env_vars({
     'DYNAMODB_TABLE_NAME_AUDIT': str,

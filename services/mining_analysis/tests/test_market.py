@@ -10,6 +10,8 @@ import boto3
 import pytest
 from moto import mock_aws
 
+from core import utils
+from core.exceptions import InvalidInputError, RegisterNotFoundError, ServiceUnavailableError
 from models.market_prices import MarketPriceItem, RoyaltyRuleItem
 from schemas.market import (
     EstimateConfidence,
@@ -19,8 +21,7 @@ from schemas.market import (
     RateBasis,
     RoyaltyRuleSchema
 )
-from services import market_sources, official_estimate, prices_dyb, royalty_rules, utils
-from services.exceptions import InvalidInputError, RegisterNotFoundError, ServiceUnavailableError
+from services import market_sources, official_estimate, prices_dyb, royalty_rules
 from services.prices_store import MineralRecord
 from tests.dynamo_helpers import build_market_tables
 

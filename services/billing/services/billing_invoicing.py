@@ -22,6 +22,10 @@ from typing import Any, Final
 import segno
 from boto3.resources.base import ServiceResource
 
+from core.environment import load_and_validate_env_vars
+from core.exceptions import InvalidInputError, ServiceUnavailableError
+from core.logger_config import custom_logger as logger
+from core.utils import get_current_time_gmt, load_parameters
 from schemas.billing import (
     EMISSION_OFFLINE,
     EMISSION_ONLINE,
@@ -49,10 +53,6 @@ from services.billing_payments import sin_payment_code
 from services.billing_siat import build_cuf, siat_stamp
 from services.billing_siat_client import Emitter, InvoiceCancellation, InvoiceSubmission
 from services.billing_siat_codes import current_codes, emitter_for, get_catalog, last_codes
-from services.environment import load_and_validate_env_vars
-from services.exceptions import InvalidInputError, ServiceUnavailableError
-from services.logger_config import custom_logger as logger
-from services.utils import get_current_time_gmt, load_parameters
 
 # Where the SIN checks an invoice from its QR. It changes with the SIN's
 # environment, so it is configuration and not a constant.

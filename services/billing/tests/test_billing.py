@@ -13,6 +13,11 @@ import boto3
 import pytest
 from moto import mock_aws
 
+from core.exceptions import (
+    InvalidInputError,
+    RegisterAlreadyExistsError,
+    RegisterNotFoundError
+)
 from models.billing import (
     CASH_MOVEMENTS_TABLE,
     CASH_SESSIONS_TABLE,
@@ -45,11 +50,6 @@ from services import (
     billing_reports,
     billing_sales,
     billing_stock
-)
-from services.exceptions import (
-    InvalidInputError,
-    RegisterAlreadyExistsError,
-    RegisterNotFoundError
 )
 
 OWNER = 'farmacia.demo@bearsoft.com.bo'

@@ -4,8 +4,8 @@
 from datetime import date
 from fastapi import Request
 from boto3.resources.base import ServiceResource
-from services.utils import handle_service_errors
-from services.logger_config import custom_logger as logger
+from core.utils import handle_service_errors
+from core.logger_config import custom_logger as logger
 from services.price_forecast import get_price_forecast_service
 from services.mining_analysis import (
     get_all_prices_service,

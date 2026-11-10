@@ -6,10 +6,10 @@ from datetime import date
 
 import pytest
 
+from core.exceptions import ResourceNotFoundError
 from schemas.finance import LawParameterSchema
 from schemas.report import ClientParameterSchema, ReportError, SuggestedParameterSchema
 from services import finance, parameters
-from services.exceptions import ResourceNotFoundError
 
 PROVISION = SuggestedParameterSchema(parameter_code = 'IUE_PROVISION',
                                      name = 'Provisión mensual del IUE', value = 2)

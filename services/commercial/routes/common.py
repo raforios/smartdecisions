@@ -5,9 +5,9 @@ from typing import Any
 
 from fastapi import Depends, File, UploadFile
 
+from core.security import get_current_payload
 from schemas.clients import CallerClaims
 from services.common import decode_csv_upload
-from services.security import get_current_payload
 
 
 async def csv_upload_text(file: UploadFile = File(...)) -> str:

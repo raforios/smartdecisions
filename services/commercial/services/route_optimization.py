@@ -19,6 +19,8 @@ from typing import Any
 import numpy as np
 from boto3.resources.base import ServiceResource
 
+from core.exceptions import InvalidInputError
+from core.logger_config import custom_logger as logger
 from models.localization import PlannedPointItem, PlannedRouteItem
 from schemas.route_optimization import (
     OptimizedStopSchema,
@@ -26,9 +28,7 @@ from schemas.route_optimization import (
     RouteOptimizationSchema,
     RouteShapeSchema
 )
-from services.exceptions import InvalidInputError
 from services.localization import get_planned_route
-from services.logger_config import custom_logger as logger
 from services.optimization import order_stops
 from services.routing import road_trip
 

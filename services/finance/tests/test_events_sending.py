@@ -14,7 +14,7 @@ from unittest.mock import patch
 from jose import jwt
 from starlette.requests import Request
 
-from services import utils
+from core import utils
 
 
 def _request(token: str = 'token') -> Request:

@@ -6,6 +6,7 @@
 '''
 import numpy as np
 
+from core.logger_config import custom_logger as logger
 from schemas.classification import (
     ComputeCostLogisticRequest,
     ComputeGradientLogisticRequest,
@@ -27,7 +28,6 @@ from schemas.prediction import (
     TrainLinearRegressionRequest,
     TrainLinearRegressionResponse
 )
-from services.logger_config import custom_logger as logger
 from services.machine_learning import (
     DescentConfig,
     compute_cost,

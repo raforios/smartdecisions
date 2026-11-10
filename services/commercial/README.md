@@ -356,7 +356,7 @@ Two templates: `ventas`, the reduced one and the official one (date, invoice, cl
 
 The service's business values live in the `commercial_parameters` table (one item per code),
 not in `.env`. They are read by `load_parameters`, from the SERVICE PARAMETERS
-block at the end of `services/utils.py`, once per container; a value changed in
+block at the end of `core/utils.py`, once per container; a value changed in
 the table is picked up by the containers that start afterwards. If one is
 missing, the service does not start. What each company sets lives in its policies (`commercial_policies`, `commercial_credit_policies`); what the company does not set takes the table value. Definition: the `commercial` rows of
 `docs/parametros.md`. Seed:

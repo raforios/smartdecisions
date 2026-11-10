@@ -7,12 +7,12 @@ from datetime import datetime, timezone
 import pytest
 from fastapi.testclient import TestClient
 
+from core.exceptions import ForbiddenError
 from controllers.users import get_current_admin_user
 from main import app
 from routes.auth import router
 from schemas.role import Role
 from schemas.users import UserResponse
-from services.exceptions import ForbiddenError
 
 
 def _user(role: Role) -> UserResponse:

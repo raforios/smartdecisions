@@ -22,6 +22,12 @@ from datetime import date as date_type
 
 from boto3.resources.base import ServiceResource
 
+from core.crud import find_item_by_key, query_by_partition
+from core.utils import load_parameters
+from core.environment import load_and_validate_env_vars
+from core.exceptions import ResourceNotFoundError
+from core.logger_config import custom_logger as logger
+from core.utils import get_current_time_gmt
 from models.factors import FactorItem, FactorValueItem
 from schemas.factors import (
     FactorDefinitionSchema,
@@ -34,13 +40,7 @@ from schemas.factors import (
     FactorSeriesResponseSchema,
     FactorValueSchema
 )
-from services.crud import find_item_by_key, query_by_partition
-from services.utils import load_parameters
-from services.environment import load_and_validate_env_vars
 from services.quotes_utils import to_dynamo
-from services.exceptions import ResourceNotFoundError
-from services.logger_config import custom_logger as logger
-from services.utils import get_current_time_gmt
 
 ENV_VARS = {
     **load_and_validate_env_vars({

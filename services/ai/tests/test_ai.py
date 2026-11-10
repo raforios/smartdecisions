@@ -15,9 +15,10 @@ import pytest
 
 from fastapi import HTTPException
 
+from core import utils
 from models.ai import PromptItem
 from schemas.ai import AIError, PromptCaller
-from services import ai, ai_utils, utils
+from services import ai, ai_utils
 from services.ai_utils import build_cache_key
 
 # The ADMIN writes the general roles; a manager, those of their company.

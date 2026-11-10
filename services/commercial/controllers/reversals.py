@@ -8,11 +8,11 @@ from typing import Any
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.utils import audit_event, handle_service_errors
 from controllers.sales_load import replace_order_lines
 from schemas.reversals import ReversalResponse, ReversalSchema, ReversalsReport
 from services.commercial_utils import get_owned_dataset, list_datasets_for_owner
 from services.reversals import build_report, list_reversals, store_reversal, to_reversal_response
-from services.utils import audit_event, handle_service_errors
 
 
 @handle_service_errors('COMMERCIAL')

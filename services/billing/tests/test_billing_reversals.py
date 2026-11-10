@@ -14,15 +14,16 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from core import utils
+from core.exceptions import InvalidInputError
 from controllers import billing_reversals as controllers
 from schemas.billing import BillingError, SaleStatus, SiatReceipt
 from schemas.billing_cash import CashCloseIn, ExpenseType
 from schemas.billing_returns import CreditNoteOut, CreditNoteRef, ReturnError
 from schemas.billing_reversals import ReversalError
 from schemas.billing_siat import InvoiceState
-from services import billing_cash, billing_reversals, billing_sales, utils
+from services import billing_cash, billing_reversals, billing_sales
 from services import billing_siat_client as siat_client
-from services.exceptions import InvalidInputError
 from tests.test_billing import CASHIER, OWNER, _dynamodb # pylint: disable=unused-import
 from tests.test_billing_mail import _ses # pylint: disable=unused-import
 from tests.test_billing_returns import ( # pylint: disable=unused-import

@@ -1,0 +1,983 @@
+'''
+    Utils service.
+
+    Event emission, usage logging and centralized error handling for the
+    COMMERCIAL microservice.
+
+    This module is the DynamoDB-backed derivation of the canonical MySQL
+    boilerplate `services/localization/core/utils.py`. The function names,
+    signatures and responsibilities are kept identical so every microservice
+    shares the same contract; only the storage-specific pieces are adapted:
+
+        - SQLAlchemy `Session` / `SQLAlchemyError` handling is replaced with
+          botocore `ClientError` handling (DynamoDB has no transactional
+          rollback, so none is attempted).
+        - The SQL-only helper `sqlalchemy_object_as_dict` is dropped, and the
+          FILES block at the end of this file is the DynamoDB counterpart of
+          TRADE's: same names and same two-step flow, without a `Session` to
+          commit. It is the model for any new service that moves files.
+        - `audit_event` also supports synchronous callables, because the
+          DynamoDB service layer is synchronous (boto3), unlike localization's
+          async SQLAlchemy services.
+'''
+from dataclasses import dataclass
+import asyncio
+from collections.abc import Callable
+import decimal
+import enum
+import inspect
+import json
+import mimetypes
+import time
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
+from functools import wraps
+from typing import Any
+
+import boto3
+import requests as req
+from fastapi import HTTPException, Request
+from jose import JWTError, jwt
+from pydantic import BaseModel, ValidationError
+from botocore.exceptions import ClientError as AWSClientError
+
+from core.logger_config import custom_logger as logger
+from core.exceptions import (
+    InvalidInputError,
+    RegisterAlreadyExistsError,
+    RegisterNotFoundError,
+    ServiceUnavailableError
+)
+from core.environment import load_and_validate_env_vars
+from schemas.files import FilesError
+
+# Loads the environment variables this module needs
+ENV_VARS = load_and_validate_env_vars(
+    env_vars = {
+        'TARGET_TIMEZONE': str,
+        'REQUEST_TIMEOUT_SECONDS': int
+    },
+    optional_env_vars = {
+        'API_URL': str
+    }
+)
+
+TARGET_TIMEZONE = ENV_VARS['TARGET_TIMEZONE']
+# One address for every service: the gateway api.bearsoft.com.bo routes each
+# /v1/<service> to its own Lambda, so the path names the service, not the URL.
+API_URL = (ENV_VARS.get('API_URL') or '').rstrip('/') or None
+EVENTS_AUDIT_URL = f'{API_URL}/v1/events/audit' if API_URL else None
+EVENTS_LOG_URL = f'{API_URL}/v1/events/usage-log' if API_URL else None
+
+# Seconds a notification to EVENTS waits for. A decision, not a number the
+# code picks: it cuts before the API Gateway timeout so a slow EVENTS never
+# takes down the answer to the client.
+REQUEST_TIMEOUT_SECONDS = ENV_VARS['REQUEST_TIMEOUT_SECONDS']
+
+
+def get_current_time_gmt() -> datetime:
+    '''
+        Returns the current datetime object aware of the target timezone.
+        This function should be used as the default value for all timestamp
+        attributes to ensure database consistency.
+    '''
+    tz = ZoneInfo(TARGET_TIMEZONE)
+    return datetime.now(tz = tz)
+
+
+def process_query_params(query_params: Any) -> dict[str, Any]:
+    '''
+        Processes query parameters from a Pydantic model or dictionary into a
+        dictionary for DynamoDB queries. Prefers Pydantic V2's `model_dump()`
+        and falls back to V1's `dict()` for backwards compatibility.
+    '''
+    if hasattr(query_params, 'model_dump'):
+        return query_params.model_dump(exclude_none = True)
+    if hasattr(query_params, 'dict'):
+        return query_params.dict(exclude_none = True)
+    return query_params
+
+
+class CustomJSONEncoder(json.JSONEncoder):
+    '''
+        JSON encoder to handle datetime, Decimal, Pydantic models and Enums so
+        audit / usage-log payloads serialize DynamoDB items without surprises.
+    '''
+    def default(
+        self,
+        o
+    ):
+        if isinstance(o, (date, datetime)):
+            return o.isoformat()
+        if isinstance(o, decimal.Decimal):
+            return float(o)
+        if isinstance(o, BaseModel):
+            return o.model_dump()
+        if isinstance(o, enum.Enum):
+            return o.value
+        return super().default(o)
+
+
+class UsageLogData(BaseModel):
+    '''
+        Data class to manage the structure of the usage LOGS table.
+    '''
+    microservice: str
+    endpoint: str
+    method: str
+    status_code: int
+    ip_address: str
+    user_app: str
+    request_body: dict | None = None
+    response_body: dict | list | None = None
+    response_time_ms: int
+
+
+async def _perform_request(
+    method: str,
+    url: str,
+    payload: dict[str, Any] | None = None,
+    authorization: str | None = None
+) -> req.Response | None:
+    '''
+        Helper function to perform a request call in a thread pool executor.
+        Only POST is needed to reach the EVENTS microservice. Returns None on
+        transport failure so a downstream outage never breaks the caller.
+    '''
+    try:
+        def request_call():
+            if method == 'POST':
+                return req.post(
+                    url, json = payload, timeout = REQUEST_TIMEOUT_SECONDS,
+                    headers = {'Authorization': authorization} if authorization else None
+                )
+            raise ValueError(f'Unsupported method: {method}')
+
+        return await asyncio.to_thread(request_call)
+    except req.exceptions.RequestException as e:
+        error_msg = f'An error occurred while using _perform_request function: {e}'
+        logger.error(error_msg, exc_info = True)
+        return None
+
+
+async def send_audit_event(
+    audit_data: dict,
+    authorization: str | None = None
+) -> None:
+    '''
+        Asynchronous function to send an audit event to the EVENTS microservice.
+    '''
+    if not EVENTS_AUDIT_URL:
+        logger.warning('API_URL is not set. Cannot send audit event.')
+        return
+
+    response = await _perform_request(
+        'POST', EVENTS_AUDIT_URL, payload = audit_data, authorization = authorization
+    )
+    if response is None:
+        return
+    if response.status_code >= 400:
+        error_msg = (
+            f'Audit event rejected with status {response.status_code}: {response.text[:200]}'
+        )
+        logger.warning(error_msg)
+        return
+    message = f'Audit event sent successfully. Status: {response.status_code}'
+    logger.info(message)
+
+
+async def send_usage_log(
+    log_data: dict,
+    authorization: str | None = None
+) -> None:
+    '''
+        Asynchronous function to send a usage log to the EVENTS microservice.
+    '''
+    if not EVENTS_LOG_URL:
+        logger.warning('API_URL is not set. Cannot send usage log.')
+        return
+
+    response = await _perform_request(
+        'POST', EVENTS_LOG_URL, payload = log_data, authorization = authorization
+    )
+    if response is None:
+        return
+    if response.status_code >= 400:
+        error_msg = f'Usage log rejected with status {response.status_code}: {response.text[:200]}'
+        logger.warning(error_msg)
+        return
+    message = f'Usage log sent successfully. Status: {response.status_code}'
+    logger.info(message)
+
+
+async def _process_and_send_usage_log(
+    log_data: UsageLogData,
+    authorization: str | None = None
+) -> None:
+    '''
+        Processes and sends a usage log to the EVENTS microservice.
+    '''
+    try:
+        if isinstance(log_data.response_body, int):
+            log_data.response_body = {
+                'message': f'Register with ID: {log_data.response_body} deleted successfully.'
+            }
+
+        log_data_json = json.dumps(
+            log_data.model_dump(by_alias = True), cls = CustomJSONEncoder
+        )
+        # Awaited, not scheduled (Rafael, 19-oct-2026): Lambda freezes as soon
+        # as the response leaves, and a background task could die unsent.
+        await send_usage_log(json.loads(log_data_json), authorization)
+    except TypeError as e:
+        error_msg = f'Error serializing log data: {e}'
+        logger.error(error_msg, exc_info = True)
+
+
+async def _get_request_body_for_logging(request: Request | None) -> dict | None:
+    '''
+        Helper to safely extract the request body for logging, handling the
+        different content types.
+    '''
+    if not request or request.method not in ['POST', 'PUT', 'PATCH']:
+        return None
+
+    content_type = request.headers.get('content-type', '') or ''
+
+    if 'application/json' in content_type:
+        try:
+            return await request.json()
+        except ValueError:
+            return {'detail': 'Invalid JSON in request body'}
+
+    if 'multipart/form-data' in content_type:
+        return {'detail': 'Multipart form data (file upload) not logged.'}
+
+    return {'detail': f'Content-Type {content_type} not logged.'}
+
+
+def _serialize_response(response_data: Any) -> Any:
+    '''
+        Coerces the response into a JSON-serializable shape for the usage log.
+    '''
+    if isinstance(response_data, BaseModel):
+        return response_data.model_dump()
+    if isinstance(response_data, list):
+        return [_serialize_response(item) for item in response_data]
+    return response_data
+
+
+def _safe_schedule(coro) -> None:
+    '''
+        Schedules a coroutine on the running event loop; falls back to a
+        throw-away loop when called from a sync context without a running loop.
+    '''
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(coro)
+    except RuntimeError:
+        try:
+            asyncio.run(coro)
+        except RuntimeError as e:
+            error_msg = f'Could not schedule background task: {e}'
+            logger.warning(error_msg)
+
+
+def handle_service_errors(
+    microservice_name: str,
+    with_log: bool = True
+):
+    '''
+        Decorator factory to handle common exceptions and log usage metrics.
+        Applied to the controller layer, where `request` and `current_user`
+        are available as keyword arguments.
+    '''
+    def decorator(func: Callable):
+        @wraps(func)
+        async def wrapper(
+            *args,
+            **kwargs
+        ):
+            request: Request = kwargs.get('request')
+            start_time = time.perf_counter()
+            response_data = None
+            status_code = 500
+
+            request_body = await _get_request_body_for_logging(request)
+
+            try:
+                result = await func(*args, **kwargs)
+                response_data = result
+                status_code = 200
+                return result
+            except AWSClientError as e:
+                error_msg = f'AWS client error in {func.__name__}: {e}'
+                logger.error(error_msg, exc_info = True)
+                status_code = 500
+                response_data = {'detail': 'A database client error occurred.'}
+                raise HTTPException(
+                    status_code = status_code,
+                    detail = 'A database client error occurred.'
+                ) from e
+            except (InvalidInputError, RegisterAlreadyExistsError, RegisterNotFoundError) as e:
+                # Our own HTTP errors already carry the right status (400/404/
+                # 409) and a stable code as detail. Re-raise them intact: the
+                # frontend only recognises the code when the detail is exactly
+                # the code, never "409: CODE".
+                status_code = e.status_code
+                response_data = {'detail': e.detail}
+                raise
+            except HTTPException as e:
+                status_code = e.status_code
+                response_data = {'detail': e.detail}
+                raise
+            except ValidationError as e:
+                status_code = 422
+                response_data = {'detail': json.loads(e.json())}
+                raise HTTPException(status_code = 422, detail = json.loads(e.json())) from e
+            finally:
+                if request and EVENTS_LOG_URL:
+                    end_time = time.perf_counter()
+                    log_data = UsageLogData(
+                        microservice = microservice_name,
+                        endpoint = request.url.path,
+                        method = request.method,
+                        status_code = status_code,
+                        ip_address = getattr(request.client, 'host', '0.0.0.0'),
+                        user_app = (_caller_email(request) or kwargs.get('current_user')
+                                    or 'anonymous'),
+                        request_body = request_body,
+                        response_time_ms = int((end_time - start_time) * 1000)
+                    )
+                    log_data.response_body = (
+                        _serialize_response(response_data) if with_log else None
+                    )
+                    await _process_and_send_usage_log(log_data, _caller_authorization(request))
+
+        return wrapper
+    return decorator
+
+
+@dataclass(frozen = True)
+class AuditSpec:
+    '''
+        What an audited call records: the service, the entity, the action and,
+        when the entity is not identified by `id`, the field that identifies it.
+    '''
+    microservice_name: str
+    entity_name: str
+    action: str
+    id_field: str | None = None
+
+
+def _resolve_audit_entity(
+    result: Any,
+    id_field: str | None = None
+) -> tuple[str, Any | None]:
+    '''
+        Extracts (entity_id, new_values) from the wrapped function result.
+
+        The audit service requires a string entity_id, so '0' is used as a
+        neutral fallback for bulk / value-less results. `id_field` names the
+        field that identifies the entity (an account's `account_code`); without
+        it, the usual names are tried, as before (Rafael, 22-oct-2026).
+    '''
+    candidate_keys = ((id_field,) if id_field else ()) + ('id', 'run_id', 'dataset_id', 'client_id')
+
+    def _pick_id(values: dict[str, Any]) -> str:
+        for key in candidate_keys:
+            if values.get(key) is not None:
+                return str(values[key])
+        return '0'
+
+    if isinstance(result, BaseModel):
+        dumped = result.model_dump()
+        return _pick_id(dumped), dumped
+    if isinstance(result, dict):
+        return _pick_id(result), result
+    return '0', None
+
+
+def _audit_payload(
+    result: Any,
+    kwargs: dict[str, Any],
+    spec: AuditSpec
+) -> dict[str, Any]:
+    '''
+        Builds the audit record of a call: who changed which entity, and how.
+    '''
+    user_id = (_caller_email(kwargs.get('request')) or kwargs.get('current_user')
+               or kwargs.get('user_id') or 'usr_test')
+    entity_id, new_values = _resolve_audit_entity(result, spec.id_field)
+    formatted_new = (
+        json.dumps(new_values, cls = CustomJSONEncoder) if new_values is not None else None
+    )
+    audit_payload = {
+        'microservice': spec.microservice_name,
+        'entity_name': spec.entity_name,
+        'entity_id': entity_id,
+        'action': spec.action,
+        'user_id': str(user_id),
+        'old_values': None,
+        'new_values': formatted_new
+    }
+    return audit_payload
+
+
+def audit_event(
+    microservice_name: str,
+    entity_name: str,
+    action: str,
+    id_field: str | None = None
+):
+    '''
+        Decorator factory to send an audit event after a service function call.
+        Supports both synchronous and asynchronous wrapped callables.
+        `id_field` names the field of the result that identifies the entity.
+    '''
+    spec = AuditSpec(microservice_name, entity_name, action, id_field)
+
+    def decorator(func: Callable):
+        is_coroutine = inspect.iscoroutinefunction(func)
+
+        @wraps(func)
+        def sync_wrapper(
+            *args,
+            **kwargs
+        ):
+            result = func(*args, **kwargs)
+            _safe_schedule(send_audit_event(
+                _audit_payload(result, kwargs, spec),
+                _caller_authorization(kwargs.get('request'))
+            ))
+            return result
+
+        @wraps(func)
+        async def async_wrapper(
+            *args,
+            **kwargs
+        ):
+            result = await func(*args, **kwargs)
+            # Awaited before answering: in Lambda a scheduled task can be
+            # frozen with the function and the audit record lost (19-oct-2026).
+            await send_audit_event(
+                _audit_payload(result, kwargs, spec),
+                _caller_authorization(kwargs.get('request'))
+            )
+            return result
+
+        return async_wrapper if is_coroutine else sync_wrapper
+    return decorator
+
+
+def _caller_authorization(request: Request | None) -> str | None:
+    '''
+        The Authorization header of the request being served, forwarded to
+        EVENTS so it can check that whoever writes a log is a real caller.
+
+        The token was already validated by this service; EVENTS validates it
+        again because its POST endpoints are reachable from the internet.
+
+        Args:
+            request (Request | None): The incoming request, when there is one.
+
+        Returns:
+            str | None: The header, or None for calls with no request.
+    '''
+    return request.headers.get('authorization') if request is not None else None
+
+
+def _caller_email(request: Request | None) -> str | None:
+    '''
+        The e-mail of whoever signed in and made the call: the person a log
+        records, never the company that owns the data (Rafael, 23-oct-2026:
+        by the user we know the company, not the other way round).
+
+        The token was already validated by the route, so its claims are only
+        read here, not checked again.
+
+        Args:
+            request (Request | None): The incoming request, when there is one.
+
+        Returns:
+            str | None: The e-mail in the token, or None when there is none.
+    '''
+    header = _caller_authorization(request) or ''
+    scheme, _, token = header.partition(' ')
+    if scheme.lower() != 'bearer' or not token:
+        return None
+    try:
+        return jwt.get_unverified_claims(token).get('email')
+    except JWTError:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# FILES: the standard addition for a service that loads files
+# ---------------------------------------------------------------------------
+#
+# Approved by Rafael on 16-oct-2026 as the boilerplate block for file loads,
+# taken from INGEST, where it was the one part that depended on nobody. It
+# talks to FILES and to nothing else: no other service's tables, buckets or
+# code. The client uploads the file to S3 through FILES first, and the
+# business endpoint receives only its NAME.
+#
+# The rule it exists to keep (`CLAUDE.md` §9): **FILES is who touches the
+# bucket.** A service never holds its own `boto3.client('s3')`.
+#
+# The caller's token is forwarded on every call so FILES authorizes the real
+# user and not the service. What the rows mean —the validator— belongs to the
+# service, never to this block.
+
+# A file upload is not a JSON notification, so it gets its own budget — and
+# that budget is a decision, not a number the code picks: it lives in the
+# `.env` like every other one.
+FILES_ENV_VARS = load_and_validate_env_vars(
+    env_vars = {
+        'FILES_TIMEOUT_SECONDS': int
+    },
+    optional_env_vars = {
+        'BUCKET_NAME': str,
+        'BUCKET_PATH': str
+    }
+)
+BUCKET_NAME = FILES_ENV_VARS.get('BUCKET_NAME') or ''
+DEFAULT_BUCKET_PATH = (FILES_ENV_VARS.get('BUCKET_PATH') or '').strip('/')
+FILES_TIMEOUT_SECONDS = FILES_ENV_VARS['FILES_TIMEOUT_SECONDS']
+
+
+def _guess_content_type(file_key: str) -> str:
+    '''
+        The MIME type of an object, from its name.
+
+        Args:
+            file_key (str): Object key or filename.
+
+        Returns:
+            str: A type FILES accepts, or the generic one.
+    '''
+    guessed, _ = mimetypes.guess_type(file_key)
+    return guessed or 'application/octet-stream'
+
+
+def _require_files_service() -> None:
+    '''
+        Refuses early when the service was not configured to reach FILES.
+
+        Raises:
+            ServiceUnavailableError: API_URL or BUCKET_NAME missing.
+    '''
+    if not API_URL or not BUCKET_NAME:
+        error_msg = 'API_URL or BUCKET_NAME are not set.'
+        logger.error(error_msg)
+        raise ServiceUnavailableError(detail = FilesError.NOT_CONFIGURED.value)
+
+
+def _handle_files_service(
+    action: str,
+    auth_token: str,
+    **kwargs: Any
+) -> Any:
+    '''
+        Every conversation with FILES goes through here.
+
+        Actions and what each one expects:
+            - read:   file_key, delimiter   -> the parsed rows
+            - create: file_key, data        -> the stored object key; the bytes
+                                               go to S3 through a URL FILES signs
+            - delete: file_key              -> None
+            - download: file_key            -> a short-lived URL of the object
+
+        Args:
+            action (str): One of read, create, delete, download.
+            auth_token (str): The caller's Authorization header, as received.
+            **kwargs (Any): The arguments of the action.
+
+        Returns:
+            Any: What the action yields.
+
+        Raises:
+            ServiceUnavailableError: FILES unreachable, refusing, or the
+                action is unknown.
+    '''
+    _require_files_service()
+    headers = {'Authorization': auth_token}
+    file_key = kwargs.get('file_key', '')
+
+    try:
+        if action == 'read':
+            response = req.get(
+                f'{API_URL}/v1/s3/read/{BUCKET_NAME}/{file_key}',
+                headers = headers, timeout = FILES_TIMEOUT_SECONDS,
+                params = {'delimiter': kwargs.get('delimiter') or ','}
+            )
+        elif action == 'create':
+            # Through a signed URL and not in the request body: a stored sales
+            # dataset is larger than the 6 MB a Lambda takes in.
+            folder, _, name = file_key.rpartition('/')
+            response = req.post(
+                f'{API_URL}/v1/s3/upload-presigned',
+                headers = headers, timeout = FILES_TIMEOUT_SECONDS,
+                json = {'bucket_name': BUCKET_NAME,
+                        'file_path': folder or DEFAULT_BUCKET_PATH, 'file_name': name}
+            )
+        elif action == 'download':
+            response = req.get(
+                f'{API_URL}/v1/s3/download-url/{BUCKET_NAME}/{file_key}',
+                headers = headers, timeout = FILES_TIMEOUT_SECONDS
+            )
+        elif action == 'delete':
+            response = req.delete(
+                f'{API_URL}/v1/s3/delete',
+                headers = headers, timeout = FILES_TIMEOUT_SECONDS,
+                json = {'bucket_name': BUCKET_NAME, 'file_path': '',
+                        'file_name': file_key}
+            )
+        else:
+            raise ValueError(f'Unsupported FILES action: {action}')
+    except req.exceptions.RequestException as error:
+        error_msg = f'Network error calling FILES to {action} {file_key}: {error}'
+        logger.error(error_msg, exc_info = True)
+        raise ServiceUnavailableError(detail = FilesError.UNREACHABLE.value) from error
+
+    if not response.ok:
+        error_msg = (f'FILES refused to {action} {file_key}: '
+                     f'status={response.status_code} body={response.text[:300]}')
+        logger.error(error_msg)
+        raise ServiceUnavailableError(detail = FilesError.REJECTED.value)
+
+    if action == 'read':
+        return (response.json() or {}).get('data') or []
+    if action == 'create':
+        return _put_signed(response.json(), kwargs['data'], file_key)
+    if action == 'download':
+        return response.json()['url']
+    return None
+
+
+def _put_signed(
+    signed: dict[str, Any],
+    data: bytes,
+    file_key: str
+) -> str:
+    '''
+        Sends the bytes to the URL FILES signed, with the MIME type FILES
+        signs for the extension.
+
+        Args:
+            signed (dict[str, Any]): FILES' answer: `presigned_url`, `file_key`.
+            data (bytes): Content to store.
+            file_key (str): The key, for its extension and the log.
+
+        Returns:
+            str: The stored object key, as FILES reports it.
+
+        Raises:
+            ServiceUnavailableError: The bucket did not take the bytes.
+    '''
+    try:
+        req.put(signed['presigned_url'], data = data, timeout = FILES_TIMEOUT_SECONDS,
+                headers = {'Content-Type': _guess_content_type(file_key)}).raise_for_status()
+    except req.exceptions.RequestException as error:
+        error_msg = f'Could not upload {file_key} through its signed URL: {error}'
+        logger.error(error_msg)
+        raise ServiceUnavailableError(detail = FilesError.UNREACHABLE.value) from error
+    return signed.get('file_key') or file_key
+
+
+def read_file_rows(
+    file_key: str,
+    auth_token: str,
+    delimiter: str = ','
+) -> list:
+    '''
+        The rows of a stored file, read through FILES.
+
+        One file holds one contract, so what comes back is one flat table —
+        which is exactly what FILES answers with.
+
+        Args:
+            file_key (str): Object key inside the bucket.
+            auth_token (str): The caller's Authorization header.
+            delimiter (str): Field separator, for a CSV.
+
+        Returns:
+            list: One dictionary per row.
+    '''
+    rows = _handle_files_service(
+        'read', auth_token, file_key = file_key, delimiter = delimiter
+    )
+    message = f'Read {len(rows)} row(s) from {file_key} through FILES.'
+    logger.info(message)
+    return rows
+
+
+def store_file(
+    file_key: str,
+    data: bytes,
+    auth_token: str
+) -> str:
+    '''
+        Stores bytes in the bucket through FILES; FILES decides the MIME
+        type from the extension.
+
+        Args:
+            file_key (str): Destination object key.
+            data (bytes): Content to store.
+            auth_token (str): The caller's Authorization header.
+
+        Returns:
+            str: The stored object key, as FILES reports it.
+    '''
+    stored = _handle_files_service('create', auth_token, file_key = file_key, data = data)
+    message = f'Stored {stored} through FILES.'
+    logger.info(message)
+    return stored
+
+
+def delete_stored_file(
+    file_key: str,
+    auth_token: str
+) -> None:
+    '''
+        Removes a consumed object from the bucket, through FILES.
+
+        A staged upload is temporary: once its rows are in, leaving it behind
+        turns the bucket into a graveyard nobody dares clean.
+
+        Args:
+            file_key (str): Object key to remove.
+            auth_token (str): The caller's Authorization header.
+    '''
+    _handle_files_service('delete', auth_token, file_key = file_key)
+    message = f'Deleted {file_key} through FILES.'
+    logger.info(message)
+
+
+
+def download_file_bytes(
+    file_key: str,
+    auth_token: str
+) -> bytes:
+    '''
+        A stored file as it is, fetched through a short-lived URL FILES signs.
+
+        For what cannot come back as rows: a file too large for the 6 MB a
+        Lambda can answer, or one that must stay a file (a template). FILES
+        still decides who may fetch what; the bytes go from the bucket to this
+        service without crossing FILES.
+
+        Args:
+            file_key (str): Object key inside the bucket.
+            auth_token (str): The caller's Authorization header.
+
+        Returns:
+            bytes: The object.
+
+        Raises:
+            ServiceUnavailableError: FILES refused, or the bucket did not answer.
+    '''
+    url = _handle_files_service('download', auth_token, file_key = file_key)
+    try:
+        response = req.get(url, timeout = FILES_TIMEOUT_SECONDS)
+        response.raise_for_status()
+    except req.exceptions.RequestException as error:
+        error_msg = f'Could not fetch {file_key} through its download URL: {error}'
+        logger.error(error_msg)
+        raise ServiceUnavailableError(detail = FilesError.UNREACHABLE.value) from error
+    message = f'Fetched {file_key} ({len(response.content)} bytes) through FILES.'
+    logger.info(message)
+    return response.content
+
+# ---------------------------------------------------------------------------
+# SERVICE PARAMETERS: the standard block for a service with business values
+# ---------------------------------------------------------------------------
+#
+# Rafael, 24-oct-2026: every microservice keeps its own parameters in its own
+# tables and starts without depending on any other service. The values that
+# are the same for every company live in `<service>_parameters`, one item per
+# code; what each company changes lives in a table of the service that ties
+# the parameter to the company. The `.env` keeps only the configuration.
+#
+# The table is read with the Lambda's own role, once per container, the first
+# time a module asks: no HTTP, no token, no other service. A value changed in
+# the table is used by every container that starts after the change, with no
+# release. Like an environment variable, a missing or malformed value stops
+# the service instead of running on a number nobody chose. The definition and
+# the seed are the service's rows of `docs/parametros.md`
+# (`tools/seeds/seed_service_parameters.py`).
+#
+# The same block, word for word, in every service that has business values.
+
+SERVICE_PARAMETERS_TABLE = load_and_validate_env_vars(
+    env_vars = {
+        'DYNAMODB_TABLE_NAME_SERVICE_PARAMETERS': str
+    }
+)['DYNAMODB_TABLE_NAME_SERVICE_PARAMETERS']
+
+# {code: value} as stored, read once per container.
+_SERVICE_PARAMETERS: dict[str, Any] = {}
+
+
+def _read_service_parameters() -> dict[str, Any]:
+    '''
+        Every item of the service's parameters table, by code.
+
+        Returns:
+            dict[str, Any]: {code: value} as DynamoDB returns it.
+    '''
+    table = boto3.resource('dynamodb').Table(SERVICE_PARAMETERS_TABLE)
+    response = table.scan()
+    items = list(response.get('Items', []))
+    while 'LastEvaluatedKey' in response:
+        response = table.scan(ExclusiveStartKey = response['LastEvaluatedKey'])
+        items.extend(response.get('Items', []))
+    message = f'Read {len(items)} parameter(s) from {SERVICE_PARAMETERS_TABLE}.'
+    logger.info(message)
+    return {item['code']: item.get('value') for item in items}
+
+
+def _typed_parameter(
+    code: str,
+    raw: Any,
+    kind: type
+) -> Any:
+    '''
+        One stored value in the type its module reads: int, float, str or list.
+
+        Raises:
+            ValueError: When the stored value is not of that type.
+    '''
+    if kind is list:
+        if not isinstance(raw, list):
+            raise ValueError(f'{code} must be a list, got {raw}')
+        return [str(item) for item in raw]
+    if kind is int:
+        number = decimal.Decimal(str(raw))
+        if number != number.to_integral_value():
+            raise ValueError(f'{code} must be a whole number, got {raw}')
+        return int(number)
+    if kind is float:
+        return float(decimal.Decimal(str(raw)))
+    if kind is str:
+        return str(raw)
+    raise ValueError(f'{code}: unsupported type {kind.__name__}')
+
+
+def load_parameters(spec: dict[str, type]) -> dict[str, Any]:
+    '''
+        The business values a module needs, all of them typed, or the service
+        stops.
+
+        Args:
+            spec (dict[str, type]): {code: int, float, str or list}.
+
+        Returns:
+            dict[str, Any]: {code: value}.
+
+        Raises:
+            ValueError: When a code is missing from the table or malformed.
+    '''
+    if not _SERVICE_PARAMETERS:
+        _SERVICE_PARAMETERS.update(_read_service_parameters())
+    missing = [code for code in spec if _SERVICE_PARAMETERS.get(code) is None]
+    if missing:
+        error_msg = f'Parameters missing in {SERVICE_PARAMETERS_TABLE}: {missing}.'
+        logger.critical(error_msg)
+        raise ValueError(error_msg)
+    return {code: _typed_parameter(code, _SERVICE_PARAMETERS[code], kind)
+            for code, kind in spec.items()}
+
+
+# ---------------------------------------------------------------------------
+# QUEUED REQUESTS: the standard block for a service a FIFO queue feeds
+# ---------------------------------------------------------------------------
+#
+# Rafael, 6-nov-2026: SmartBilling does not call SmartDecisions over HTTP —a
+# Lambda that answered is frozen and cannot call out—; it leaves each request
+# (path, body and the cashier's token) in a FIFO queue of the receiving
+# service. That queue triggers the service's Lambda with records instead of
+# HTTP events, and each record goes through Mangum as the request it stands
+# for: the same route, token, validation and audit as one posted live. A
+# request not answered with a 2xx is reported back as failed, so SQS retries
+# it and, after the queue's receive count, keeps it in the dead-letter queue.
+# Identical in every service that consumes a queue.
+
+QUEUE_SOURCE = 'aws:sqs'
+
+
+def queued_request(record: dict[str, Any]) -> dict[str, Any]:
+    '''
+        The API Gateway (HTTP API 2.0) event a queued request stands for: a
+        POST unless the request names its method (a correction is a PATCH).
+
+        Args:
+            record (dict[str, Any]): One SQS record.
+
+        Returns:
+            dict[str, Any]: The event Mangum serves.
+    '''
+    request = json.loads(record['body'])
+    return {
+        'version': '2.0',
+        'routeKey': '$default',
+        'rawPath': request['path'],
+        'rawQueryString': '',
+        'headers': {'authorization': request['authorization'],
+                    'content-type': 'application/json'},
+        'requestContext': {'http': {'method': request.get('method', 'POST'),
+                                    'path': request['path'],
+                                    'protocol': 'HTTP/1.1', 'sourceIp': QUEUE_SOURCE,
+                                    'userAgent': QUEUE_SOURCE}},
+        'body': json.dumps(request['body']),
+        'isBase64Encoded': False
+    }
+
+
+def serve_queued(
+    event: Any,
+    context: Any,
+    serve: Callable[[dict[str, Any], Any], dict[str, Any]]
+) -> dict[str, Any] | None:
+    '''
+        Serves the records of a queue event, or None when the event is not one.
+
+        Args:
+            event (Any): Raw Lambda event.
+            context (Any): Lambda context.
+            serve (Callable[[dict[str, Any], Any], dict[str, Any]]): The
+                Mangum handler of the service.
+
+        Returns:
+            dict[str, Any] | None: The records that failed, as SQS reads them;
+                None for an event of any other kind.
+    '''
+    records = event.get('Records') if isinstance(event, dict) else None
+    if not records or records[0].get('eventSource') != QUEUE_SOURCE:
+        return None
+    failures = []
+    for record in records:
+        response = serve(queued_request(record), context)
+        if not 200 <= response['statusCode'] < 300:
+            error_msg = (f'Queued request {record["messageId"]} answered '
+                         f'{response["statusCode"]}: {str(response.get("body"))[:200]}')
+            logger.error(error_msg)
+            failures.append({'itemIdentifier': record['messageId']})
+    return {'batchItemFailures': failures}
+
+
+def is_queued(request: Request) -> bool:
+    '''
+        Whether a request came through the service's queue —another
+        application sending on its user's behalf— and not straight from a
+        person: API Gateway stamps the caller's real address, so a request
+        from outside can never carry the queue's mark.
+
+        Args:
+            request (Request): The incoming request.
+
+        Returns:
+            bool: True when it was served from a queue record.
+    '''
+    event = request.scope.get('aws.event') or {}
+    return event.get('requestContext', {}).get('http', {}).get('sourceIp') == QUEUE_SOURCE

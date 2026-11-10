@@ -17,10 +17,10 @@ from typing import Any
 from boto3.resources.base import ServiceResource
 from botocore.exceptions import ClientError
 
+from core.exceptions import InvalidInputError, RegisterNotFoundError
+from core.logger_config import custom_logger as logger
 from models.billing import LOTS_TABLE, LotItem, OWNER_KEY, LOT_SORT_KEY, lot_key
 from schemas.billing import LotOut, LotPricePatch, LotsResponse, BillingError, SaleAllocation
-from services.exceptions import InvalidInputError, RegisterNotFoundError
-from services.logger_config import custom_logger as logger
 from services.billing import (
     MONEY_DECIMALS,
     SortBounds,

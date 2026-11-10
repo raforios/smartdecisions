@@ -7,6 +7,10 @@
 from dataclasses import dataclass
 from typing import Any
 
+from core.exceptions import InvalidInputError, ServiceUnavailableError
+from core.logger_config import custom_logger as logger
+from core.security import hash_password, verify_password
+from core.utils import get_current_time_gmt
 from schemas.auth import AuthError, AuthResult, SignupResponse
 from schemas.role import Role
 from schemas.users import (
@@ -24,11 +28,7 @@ from services.dynamodb import (
     scan_all_users,
     update_user_item
 )
-from services.exceptions import InvalidInputError, ServiceUnavailableError
-from services.logger_config import custom_logger as logger
-from services.security import hash_password, verify_password
 from services.sessions import company_members, login_update
-from services.utils import get_current_time_gmt
 
 # The fields a profile change writes as they come; the password is hashed and
 # the role and status are reserved words of DynamoDB, so they travel aliased.

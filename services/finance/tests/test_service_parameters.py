@@ -1,6 +1,6 @@
 '''
     Tests for the business values read from the service's own table (the
-    SERVICE PARAMETERS block of `services/utils.py`), since 24-oct-2026.
+    SERVICE PARAMETERS block of `core/utils.py`), since 24-oct-2026.
 
     The table was seeded in moto from `docs/parametros.md` before any test
     (tests/conftest.py); here the reading itself is tested.
@@ -9,9 +9,9 @@ from decimal import Decimal
 
 import pytest
 
-from services import utils
+from core import utils
+from core.utils import load_parameters
 from services.report import DECIMAL_CODES, FINANCE_CODES, finance_parameters, report_settings
-from services.utils import load_parameters
 
 
 def test_the_report_reads_its_values_from_its_own_table():

@@ -9,9 +9,9 @@
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.utils import audit_event, handle_service_errors
 from schemas.billing_customers import CustomerEdit, CustomerOut, CustomersResponse
 from services import billing_customers
-from services.utils import audit_event, handle_service_errors
 
 SERVICE = 'BILLING'
 

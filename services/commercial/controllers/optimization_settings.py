@@ -4,9 +4,9 @@
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.utils import audit_event, handle_service_errors
 from schemas.optimization_settings import RouteSettingsResponseSchema, RouteSettingsSchema
 from services.optimization_settings import get_route_settings, save_route_settings
-from services.utils import audit_event, handle_service_errors
 
 
 @handle_service_errors('COMMERCIAL')

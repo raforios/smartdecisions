@@ -12,6 +12,7 @@ from datetime import date as date_type
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.utils import audit_event, handle_service_errors
 from schemas.market import (
     EstimateResponse,
     MarketPricesResponse,
@@ -25,7 +26,6 @@ from services.market_sources import sync_market_prices
 from services.official_estimate import estimate_all, market_series
 from services.royalty_rules import ensure_rules, to_rule_schema
 from services.sale_scenario import rate_forecast, sale_scenario
-from services.utils import audit_event, handle_service_errors
 
 
 @handle_service_errors('MINING_ANALYSIS')

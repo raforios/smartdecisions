@@ -3,6 +3,8 @@
 '''
 from fastapi import APIRouter, Depends
 
+from core.security import get_current_user
+from core.logger_config import custom_logger as logger
 from controllers.common import (
     normalize_features
 )
@@ -10,8 +12,6 @@ from schemas.common import (
     NormalizeFeaturesRequest,
     NormalizeFeaturesResponse
 )
-from services.security import get_current_user
-from services.logger_config import custom_logger as logger
 
 router = APIRouter(prefix = '/v1/common', tags = ['ML Common Functions'])
 

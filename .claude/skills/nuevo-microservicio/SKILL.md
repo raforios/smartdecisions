@@ -22,14 +22,14 @@ lo contrario.
 ```text
 $1/
 ├── controllers/$1.py    Orquestación entre rutas y servicios
+├── core/                El boilerplate: api_exceptions, crud, db_connection,
+│                        environment, exceptions, logger_config, security, utils
 ├── models/$1.py         Ítem DynamoDB o entidad SQLAlchemy
 ├── routes/$1.py         Endpoints FastAPI
 ├── schemas/$1.py        Pydantic V2, códigos de error en Enum
 ├── services/
 │   ├── $1.py            Módulo principal del dominio
-│   ├── $1_utils.py      Acceso a datos
-│   └── <boilerplate>    api_exceptions, crud, db_connection, environment,
-│                        exceptions, logger_config, security, utils
+│   └── $1_utils.py      Acceso a datos
 ├── tests/
 ├── .env  .dockerignore  .gitignore  deploy.config
 ├── main.py  requirements.txt  README.md
@@ -49,12 +49,12 @@ pregunta.
 
 ```bash
 cd services
-mkdir -p $1/{controllers,models,routes,schemas,services,tests}
+mkdir -p $1/{controllers,core,models,routes,schemas,services,tests}
 for f in api_exceptions.py crud.py db_connection.py environment.py \
          exceptions.py logger_config.py security.py utils.py; do
-  cp quotes/services/$f $1/services/$f
+  cp quotes/core/$f $1/core/$f
 done
-for d in controllers models routes schemas services tests; do
+for d in controllers core models routes schemas services tests; do
   cp quotes/$d/__init__.py $1/$d/__init__.py
 done
 cp quotes/.dockerignore quotes/.gitignore $1/
@@ -64,7 +64,7 @@ cp quotes/.dockerignore quotes/.gitignore $1/
 adición, se consulta primero y va al final del archivo.
 
 **Si el servicio carga archivos**, copia además el bloque de FILES del final
-de `finance/services/utils.py` (con sus tres imports) y `finance/schemas/files.py`,
+de `finance/core/utils.py` (con sus tres imports) y `finance/schemas/files.py`,
 y agrega al `.env` `BUCKET_NAME`, `BUCKET_PATH` y `FILES_TIMEOUT_SECONDS`.
 Las llamadas a otros servicios usan una sola variable, `API_URL`, y arman la
 ruta `/v1/<servicio>` (CLAUDE.md §5.4); nunca una `*_SERVICE_URL` por servicio.
@@ -74,7 +74,7 @@ otro (`CLAUDE.md` §4).
 ```bash
 for f in api_exceptions.py crud.py environment.py exceptions.py \
          logger_config.py security.py utils.py; do
-  diff -q quotes/services/$f $1/services/$f >/dev/null && echo "  $f OK"
+  diff -q quotes/core/$f $1/core/$f >/dev/null && echo "  $f OK"
 done
 ```
 

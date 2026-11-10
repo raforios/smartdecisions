@@ -7,6 +7,7 @@ from typing import Any
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.utils import get_current_time_gmt, handle_service_errors
 from controllers.analytics import at_month_close, payments_of, scoped_dataframe
 from controllers.purchases import purchase_figures
 from schemas.dashboard import DashboardResponse
@@ -27,7 +28,6 @@ from services.objectives import build_objectives, select_objective_periods
 from services.portfolio import build_portfolio
 from services.receivables import build_receivables
 from services.stock import build_stock
-from services.utils import get_current_time_gmt, handle_service_errors
 
 _PERCENT = 100.0
 

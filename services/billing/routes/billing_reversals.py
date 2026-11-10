@@ -8,6 +8,9 @@
 from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Depends, Path, Request
 
+from core.db_connection import GET_DB_DEPENDENCY
+from core.logger_config import custom_logger as logger
+from core.security import get_current_user, require_roles
 from controllers.billing_reversals import (
     revert_credit_note_cancellation_controller,
     revert_sale_cancellation_controller
@@ -15,9 +18,6 @@ from controllers.billing_reversals import (
 from routes.billing_returns import MANAGERS, credit_note_ref
 from schemas.billing import SaleNoteOut
 from schemas.billing_returns import CreditNoteOut, CreditNoteRef
-from services.db_connection import GET_DB_DEPENDENCY
-from services.logger_config import custom_logger as logger
-from services.security import get_current_user, require_roles
 
 router = APIRouter(prefix = '/v1/billing/sales', tags = ['Billing — Reversals'])
 

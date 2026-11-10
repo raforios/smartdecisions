@@ -36,9 +36,9 @@ sys.path.insert(0, str(FINANCE_PATH))
 load_dotenv(FINANCE_PATH / '.env')
 
 # pylint: disable=wrong-import-position
+from core.exceptions import RegisterAlreadyExistsError  # noqa: E402
 from schemas.finance import AccountSchema, AccountType, LawParameterSchema  # noqa: E402
 from schemas.report import SuggestedParameterSchema  # noqa: E402
-from services.exceptions import RegisterAlreadyExistsError  # noqa: E402
 from services.finance import create_account, set_law_parameter  # noqa: E402
 from services.parameters import set_suggested_parameter  # noqa: E402
 # pylint: enable=wrong-import-position

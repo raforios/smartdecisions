@@ -14,6 +14,8 @@
 
 import pandas as pd
 
+from core.utils import load_parameters
+from core.logger_config import custom_logger as logger
 from schemas.modules import AnalysisUnavailable
 from schemas.analytics import (
     EfficiencyBlock,
@@ -37,8 +39,6 @@ from services.analytics_utils import (
     ratio
 )
 from services.currency import money_row, money_total
-from services.utils import load_parameters
-from services.logger_config import custom_logger as logger
 
 # Price drift is only reported for products with enough movement in both halves
 # of the period; a single invoice is an anecdote, not a trend.

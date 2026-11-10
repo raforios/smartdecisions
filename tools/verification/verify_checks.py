@@ -30,7 +30,7 @@ BOILERPLATE = {'api_exceptions.py', 'crud.py', 'crud_dyb.py', 'db_connection.py'
                'environment.py', 'exceptions.py', 'logger_config.py', 'security.py',
                'utils.py'}
 SPLIT_AT = 800
-LINT_TARGETS = ('services', 'controllers', 'routes', 'schemas', 'tests')
+LINT_TARGETS = ('core', 'services', 'controllers', 'routes', 'schemas', 'tests')
 
 
 def own_files(service: Path) -> list[Path]:

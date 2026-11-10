@@ -12,6 +12,11 @@ from pathlib import Path
 
 import pytest
 
+from core.exceptions import (
+    InvalidInputError,
+    RegisterAlreadyExistsError,
+    ServiceUnavailableError
+)
 from schemas.billing import (
     SIN_PAYMENT_CODES,
     BillingError,
@@ -40,11 +45,6 @@ from tests.test_billing import ( # pylint: disable=unused-import
 from services import billing, billing_sales
 from services import billing_siat_client as siat_client
 from services.billing_invoice_xml import build_invoice_xml, validate_against_schema
-from services.exceptions import (
-    InvalidInputError,
-    RegisterAlreadyExistsError,
-    ServiceUnavailableError
-)
 
 
 # --- electronic invoicing: nominatividad -------------------------------------

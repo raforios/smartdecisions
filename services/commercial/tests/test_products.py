@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 from pydantic import ValidationError
 
+from core.exceptions import ResourceNotFoundError
 from controllers import products as controllers
 from schemas.products import (
     ProductBulkUpsertSchema,
@@ -21,7 +22,6 @@ from schemas.products import (
     ProductUpsertSchema
 )
 from services import products as master
-from services.exceptions import ResourceNotFoundError
 from tests.test_clients import OWNER, resource_fixture # pylint: disable=unused-import
 
 

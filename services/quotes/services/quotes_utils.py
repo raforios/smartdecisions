@@ -12,15 +12,15 @@ import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
+from core.environment import load_and_validate_env_vars
+from core.exceptions import ServiceUnavailableError
+from core.logger_config import custom_logger as logger
 from models.quotes import (
     RATES_PARTITION_KEY,
     RATES_SORT_KEY,
     ExchangeRateItem
 )
 from schemas.quotes import QuotesError
-from services.environment import load_and_validate_env_vars
-from services.exceptions import ServiceUnavailableError
-from services.logger_config import custom_logger as logger
 
 
 ENV_VARS = load_and_validate_env_vars({

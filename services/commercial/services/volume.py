@@ -21,6 +21,8 @@ from typing import Any
 
 import pandas as pd
 
+from core.utils import load_parameters
+from core.logger_config import custom_logger as logger
 from schemas.modules import AnalysisUnavailable
 from schemas.analytics import (
     AbcClass,
@@ -50,8 +52,6 @@ from services.analytics_utils import (
     ratio
 )
 from services.currency import money_row, money_sums, money_total
-from services.utils import load_parameters
-from services.logger_config import custom_logger as logger
 
 # Business thresholds: configurable per deployment, never literals in the code.
 # They repeat the concentration ones on purpose — the same cut points applied

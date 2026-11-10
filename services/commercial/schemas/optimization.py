@@ -9,7 +9,7 @@ from enum import Enum
 from datetime import date
 from pydantic import BaseModel, Field
 
-from services.utils import load_parameters
+from core.utils import load_parameters
 
 # How many visit days a plan spreads the clients over when the caller does not
 # say. It is the length of the commercial cycle of the operation being planned

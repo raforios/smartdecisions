@@ -23,6 +23,7 @@
 
 import pandas as pd
 
+from core.logger_config import custom_logger as logger
 from schemas.analytics import (
     CommercialSummaryBlock,
     DistRow,
@@ -34,7 +35,6 @@ from schemas.analytics import (
 
 from services.analytics_utils import RANKING_SIZE, money
 from services.currency import money_row, money_sums, money_total
-from services.logger_config import custom_logger as logger
 
 _AMOUNT = 'total_amount'
 _QUANTITY = 'quantity'

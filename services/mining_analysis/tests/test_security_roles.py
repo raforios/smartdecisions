@@ -1,5 +1,5 @@
 '''
-    Tests for the role and client claims `services.security` reads from the
+    Tests for the role and client claims `core.security` reads from the
     token: the owner key falls back to the email, and `require_roles` lets the
     allowed roles through under that key and refuses the rest with a code.
 '''
@@ -8,8 +8,8 @@ import asyncio
 import pytest
 from jose import jwt
 
-from services import security
-from services.exceptions import ForbiddenError, UnauthorizedError
+from core import security
+from core.exceptions import ForbiddenError, UnauthorizedError
 
 
 def _bearer(**claims) -> str:

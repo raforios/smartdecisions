@@ -7,6 +7,9 @@ from datetime import date as date_type
 from boto3.resources.base import ServiceResource
 from fastapi import APIRouter, Depends, Path, Query, Request, status
 
+from core.db_connection import GET_DB_DEPENDENCY
+from core.logger_config import custom_logger as logger
+from core.security import require_roles
 from controllers.market import (
     estimate_controller,
     list_rules_controller,
@@ -23,10 +26,7 @@ from schemas.market import (
     SaleScenario,
     SaleScenarioRequest
 )
-from services.db_connection import GET_DB_DEPENDENCY
-from services.logger_config import custom_logger as logger
 from services.market_sources import MARKET_SYNC_DAYS
-from services.security import require_roles
 
 router = APIRouter(prefix = '/v1/mining-analysis', tags = ['Market quotations'])
 

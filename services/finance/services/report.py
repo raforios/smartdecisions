@@ -18,6 +18,7 @@ from datetime import date as date_type
 
 from boto3.resources.base import ServiceResource
 
+from core.utils import load_parameters
 from schemas.entries import EntrySchema, LoadFlow, Periodicity
 from schemas.finance import AccountType
 from schemas.report import (
@@ -37,7 +38,6 @@ from services.finance import catalog_by_code
 from services.parameters import client_value, law_rates, rate_on
 from services.rates import period_rates
 from services.report_periods import Period, add_month, split_periods
-from services.utils import load_parameters
 
 # The business values the report reads, by their code in the service's own
 # table `finance_parameters` (the SERVICE PARAMETERS block), never from the

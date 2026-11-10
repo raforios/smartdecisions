@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 
 # The service reads its configuration from .env or the environment; without
-# either, importing services.utils stops the collection.
+# either, importing core.utils stops the collection.
 CONFIGURED = ((Path(__file__).resolve().parents[1] / '.env').exists()
               or 'TARGET_TIMEZONE' in os.environ)
 collect_ignore = [] if CONFIGURED else [
@@ -33,5 +33,5 @@ if CONFIGURED:
     _DOCUMENT = importlib.util.module_from_spec(_SPEC)
     _SPEC.loader.exec_module(_DOCUMENT)
     # pylint: disable-next=wrong-import-position
-    from services import utils as _utils  # noqa: E402
+    from core import utils as _utils
     _utils._SERVICE_PARAMETERS.update(_DOCUMENT.values('ai'))  # pylint: disable=protected-access

@@ -1,9 +1,9 @@
 '''
     Routing controller
 '''
-from services.logger_config import custom_logger as logger
+from core.logger_config import custom_logger as logger
+from core.utils import handle_operation
 from services.routing import ClusterSpec, cluster_points, order_points
-from services.utils import handle_operation
 from schemas.routing import ClustersRequest, ClustersResponse, OrderRequest, OrderResponse
 
 

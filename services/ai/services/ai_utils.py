@@ -13,6 +13,9 @@ import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
+from core.environment import load_and_validate_env_vars
+from core.exceptions import ServiceUnavailableError
+from core.logger_config import custom_logger as logger
 from models.ai import (
     CACHE_PARTITION_KEY,
     PROMPTS_PARTITION_KEY,
@@ -21,9 +24,6 @@ from models.ai import (
     PromptItem
 )
 from schemas.ai import AIError
-from services.environment import load_and_validate_env_vars
-from services.exceptions import ServiceUnavailableError
-from services.logger_config import custom_logger as logger
 
 
 ENV_VARS = load_and_validate_env_vars({

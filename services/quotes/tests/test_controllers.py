@@ -190,7 +190,7 @@ def test_the_history_endpoint_accepts_the_usdt_series(store):
     from fastapi.testclient import TestClient
 
     from main import app
-    from services.security import get_current_owner
+    from core.security import get_current_owner
 
     store[(quotes.PARALLEL_CURRENCY, date(2026, 10, 5))] = ExchangeRateItem(
         currency = quotes.PARALLEL_CURRENCY, date = date(2026, 10, 5),

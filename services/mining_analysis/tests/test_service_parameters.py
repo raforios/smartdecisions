@@ -1,6 +1,6 @@
 '''
     Tests for the business values read from the service's parameters table
-    (the SERVICE PARAMETERS block of `services/utils.py`).
+    (the SERVICE PARAMETERS block of `core/utils.py`).
 
     The table was seeded in moto from `docs/parametros.md` before the modules
     were imported (tests/conftest.py); here the reading itself is tested.
@@ -9,8 +9,8 @@ from decimal import Decimal
 
 import pytest
 
-from services import utils
-from services.utils import load_parameters
+from core import utils
+from core.utils import load_parameters
 
 
 def test_the_values_come_typed_from_the_table():

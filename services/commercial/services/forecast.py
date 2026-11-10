@@ -16,13 +16,13 @@ from typing import Any
 
 import pandas as pd
 
+from core.utils import load_parameters
+from core.logger_config import custom_logger as logger
 from schemas.modules import AnalysisUnavailable
 from schemas.analytics import AnalyticsError, ForecastBlock
 from services.analytics_utils import AMOUNT_DECIMALS, FORECAST_MONTHS_AHEAD
 from services.currency import money_row, money_sums
 from services.calculations import ask_ml_functions
-from services.utils import load_parameters
-from services.logger_config import custom_logger as logger
 
 # How the projection is shaped. The moving-average window, the ceiling on how
 # far ahead anybody may ask and how many category lines fit on one chart are

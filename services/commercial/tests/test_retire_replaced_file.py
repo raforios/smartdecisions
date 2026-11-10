@@ -2,8 +2,8 @@
     A load that replaces a stored file removes the previous one through FILES,
     and a failure to remove it never undoes the load.
 '''
+from core.exceptions import ServiceUnavailableError
 from controllers import common
-from services.exceptions import ServiceUnavailableError
 
 
 def test_the_replaced_file_is_removed_through_files(monkeypatch):

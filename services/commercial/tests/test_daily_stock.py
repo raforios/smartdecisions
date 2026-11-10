@@ -5,6 +5,8 @@
 import pytest
 from moto import mock_aws
 
+from core.exceptions import InvalidInputError
+from core.utils import get_current_time_gmt
 from schemas.daily_stock import (
     DailyStockLoadSchema,
     SaleItemSchema,
@@ -13,8 +15,6 @@ from schemas.daily_stock import (
 )
 from schemas.localization import ExecutedPointCreateSchema, ExecutedRouteCreateSchema
 from services import daily_stock, localization, localization_executed as executed
-from services.exceptions import InvalidInputError
-from services.utils import get_current_time_gmt
 from tests.dynamo_helpers import build_resource
 
 OWNER = 'yo@miempresa.com'

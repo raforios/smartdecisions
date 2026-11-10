@@ -13,7 +13,7 @@ from typing import Any
 
 import numpy as np
 
-from services.logger_config import custom_logger as logger
+from core.logger_config import custom_logger as logger
 
 # The history keeps at most this many snapshots, so a long run does not
 # exhaust memory.

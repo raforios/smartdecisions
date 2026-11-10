@@ -23,6 +23,9 @@ from typing import Any
 
 from boto3.resources.base import ServiceResource
 
+from core.exceptions import InvalidInputError, RegisterNotFoundError, ServiceUnavailableError
+from core.logger_config import custom_logger as logger
+from core.utils import get_current_time_gmt, load_parameters
 from models.billing import SALES_TABLE
 from schemas.billing import (
     BillingError,
@@ -79,9 +82,6 @@ from services.billing_siat import build_cuf, siat_stamp
 from services.billing_siat_client import Emitter, InvoiceCancellation, InvoiceSubmission
 from services.billing_siat_codes import current_codes, emitter_for, get_catalog
 from services.billing_stock import draw_down, give_back
-from services.exceptions import InvalidInputError, RegisterNotFoundError, ServiceUnavailableError
-from services.logger_config import custom_logger as logger
-from services.utils import get_current_time_gmt, load_parameters
 
 
 # The VAT rate applied to what is returned (montoEfectivoCreditoDebito), and

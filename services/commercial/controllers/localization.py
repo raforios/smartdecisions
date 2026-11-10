@@ -10,6 +10,7 @@
 from boto3.resources.base import ServiceResource
 from fastapi import Request
 
+from core.utils import audit_event, handle_service_errors
 from controllers.common import caller_token
 from schemas.localization import (
     BulkUploadPlannedResponseSchema,
@@ -75,7 +76,6 @@ from services.localization_stats import (
     route_comparisons
 )
 from services.route_optimization import optimize_planned_route
-from services.utils import audit_event, handle_service_errors
 
 
 # ---------------------------------------------------------------------------

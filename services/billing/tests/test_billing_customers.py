@@ -11,11 +11,12 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from core import utils
+from core.exceptions import RegisterNotFoundError
 from controllers import billing_customers as controllers
 from schemas.billing import BillingError, Buyer
 from schemas.billing_customers import CustomerEdit, CustomerOut, CustomersResponse
-from services import billing_customers, utils
-from services.exceptions import RegisterNotFoundError
+from services import billing_customers
 from tests.test_billing import CASHIER, OTHER_OWNER, OWNER, _dynamodb # pylint: disable=unused-import
 
 MANAGER = 'gerente@farmacia.bo'
